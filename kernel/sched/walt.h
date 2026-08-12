@@ -453,13 +453,7 @@ static int in_sched_bug;
 
 static inline bool prefer_spread_on_idle(int cpu)
 {
-	if (likely(!sysctl_sched_prefer_spread))
-		return false;
-
-	if (is_min_capacity_cpu(cpu))
-		return sysctl_sched_prefer_spread >= 1;
-
-	return sysctl_sched_prefer_spread > 1;
+	return false;
 }
 
 #else /* CONFIG_SCHED_WALT */
