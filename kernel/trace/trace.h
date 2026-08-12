@@ -1411,6 +1411,13 @@ event_trigger_unlock_commit(struct trace_event_file *file,
 	enum event_trigger_type tt = ETT_NONE;
 
 	if (!__event_trigger_test_discard(file, buffer, event, entry, &tt)) {
+#ifndef stm_log
+#define stm_log(entity, entry, len) do {} while (0)
+#endif
+#ifndef OST_ENTITY_FTRACE_EVENTS
+#define OST_ENTITY_FTRACE_EVENTS 0
+#endif
+
 		if (len)
 			stm_log(OST_ENTITY_FTRACE_EVENTS, entry, len);
 

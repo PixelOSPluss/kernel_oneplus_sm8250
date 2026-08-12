@@ -9479,6 +9479,8 @@ enum migration_type {
 #define LBF_NEED_BREAK	0x02
 #define LBF_DST_PINNED  0x04
 #define LBF_SOME_PINNED	0x08
+#define LBF_IGNORE_PREFERRED_CLUSTER_TASKS 0x10
+#define LBF_IGNORE_BIG_TASKS 0x20
 #define LBF_ACTIVE_LB   0x40
 
 struct lb_env {
@@ -13497,7 +13499,7 @@ static void task_change_group_fair(struct task_struct *p)
 	 * We couldn't detach or attach a forked task which
 	 * hasn't been woken up by wake_up_new_task().
 	 */
-	if (READ_ONCE(p->__state) == TASK_NEW)
+	if (READ_ONCE(p->state) == TASK_NEW)
 		return;
 
 	detach_task_cfs_rq(p);

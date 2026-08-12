@@ -903,7 +903,7 @@ static struct ctl_table kern_table[] = {
 		.extra1		= &one,
 	},
 #endif
-#ifdef CONFIG_SCHED_WALT
+#if 0
 	{
 		.procname	= "sched_lib_name",
 		.data		= sched_lib_name,
