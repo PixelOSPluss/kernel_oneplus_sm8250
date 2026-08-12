@@ -543,7 +543,7 @@ static int msm_lsm_set_epd(struct snd_pcm_substream *substream,
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct lsm_priv *prtd = runtime->private_data;
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_pcm_runtime __maybe_unused *rtd = substream->private_data;
 	int rc = 0;
 	struct snd_lsm_ep_det_thres epd_th;
 
@@ -579,7 +579,7 @@ static int msm_lsm_set_mode(struct snd_pcm_substream *substream,
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct lsm_priv *prtd = runtime->private_data;
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_pcm_runtime __maybe_unused *rtd = substream->private_data;
 	struct snd_lsm_detect_mode mode;
 	int rc = 0;
 
@@ -615,7 +615,7 @@ static int msm_lsm_set_gain(struct snd_pcm_substream *substream,
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct lsm_priv *prtd = runtime->private_data;
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_pcm_runtime __maybe_unused *rtd = substream->private_data;
 	struct snd_lsm_gain gain;
 	int rc = 0;
 
@@ -651,7 +651,7 @@ static int msm_lsm_set_conf(struct snd_pcm_substream *substream,
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct lsm_priv *prtd = runtime->private_data;
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_pcm_runtime __maybe_unused *rtd = substream->private_data;
 	int rc = 0;
 
 	if (p_info->param_size > MAX_NUM_CONFIDENCE) {
@@ -692,7 +692,7 @@ static int msm_lsm_reg_model(struct snd_pcm_substream *substream,
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct lsm_priv *prtd = runtime->private_data;
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_pcm_runtime __maybe_unused *rtd = substream->private_data;
 	int rc = 0;
 	struct lsm_sound_model *sm = NULL;
 	size_t offset = sizeof(union param_hdrs);
@@ -742,7 +742,7 @@ static int msm_lsm_dereg_model(struct snd_pcm_substream *substream,
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct lsm_priv *prtd = runtime->private_data;
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_pcm_runtime __maybe_unused *rtd = substream->private_data;
 	int rc = 0;
 
 	rc = q6lsm_set_one_param(prtd->lsm_client, p_info,
@@ -762,7 +762,7 @@ static int msm_lsm_set_custom(struct snd_pcm_substream *substream,
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct lsm_priv *prtd = runtime->private_data;
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_pcm_runtime __maybe_unused *rtd = substream->private_data;
 	u8 *data;
 	int rc = 0;
 
@@ -796,7 +796,7 @@ static int msm_lsm_check_and_set_lab_controls(struct snd_pcm_substream *substrea
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct lsm_priv *prtd = runtime->private_data;
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_pcm_runtime __maybe_unused *rtd = substream->private_data;
 	struct lsm_hw_params *out_hw_params = &prtd->lsm_client->out_hw_params;
 	u8 *chmap = NULL;
 	u32 ch_idx;
@@ -860,7 +860,7 @@ static int msm_lsm_set_lab_control(struct snd_pcm_substream *substream,
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct lsm_priv *prtd = runtime->private_data;
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_pcm_runtime __maybe_unused *rtd = substream->private_data;
 	struct snd_lsm_lab_control lab_ctrl;
 	int rc = 0;
 
@@ -889,7 +889,7 @@ static int msm_lsm_set_poll_enable(struct snd_pcm_substream *substream,
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct lsm_priv *prtd = runtime->private_data;
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_pcm_runtime __maybe_unused *rtd = substream->private_data;
 	struct snd_lsm_poll_enable poll_enable;
 	int rc = 0;
 
@@ -938,7 +938,7 @@ static int msm_lsm_set_det_event_type(struct snd_pcm_substream *substream,
 	struct snd_lsm_det_event_type det_event_type;
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct lsm_priv *prtd = runtime->private_data;
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_pcm_runtime __maybe_unused *rtd = substream->private_data;
 	int rc = 0;
 
 	if (p_info->param_size != sizeof(det_event_type)) {
@@ -977,7 +977,7 @@ static int msm_lsm_process_params(struct snd_pcm_substream *substream,
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct lsm_priv *prtd = runtime->private_data;
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_pcm_runtime __maybe_unused *rtd = substream->private_data;
 	int rc = 0;
 
 	dev_dbg(rtd->dev,
@@ -2660,7 +2660,7 @@ static int msm_lsm_open(struct snd_pcm_substream *substream)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct lsm_priv *prtd;
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_pcm_runtime __maybe_unused *rtd = substream->private_data;
 	int ret = 0;
 
 	pr_debug("%s\n", __func__);

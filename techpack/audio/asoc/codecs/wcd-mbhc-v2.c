@@ -90,7 +90,7 @@ static void wcd_program_btn_threshold(const struct wcd_mbhc *mbhc, bool micbias)
 {
 	struct wcd_mbhc_btn_detect_cfg *btn_det;
 	struct snd_soc_component *component = mbhc->component;
-	struct snd_soc_card *card = component->card;
+	struct snd_soc_card __maybe_unused *card = component->card;
 	s16 *btn_low, *btn_high;
 
 	if (mbhc->mbhc_cfg->calibration == NULL) {
