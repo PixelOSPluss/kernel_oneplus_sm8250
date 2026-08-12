@@ -28,6 +28,7 @@
 #include <linux/jiffies.h>
 #include <linux/delay.h>
 #include <linux/ktime.h>
+#include <linux/sched/clock.h>
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 17, 0))
 #include <linux/timekeeping.h>
 #else
