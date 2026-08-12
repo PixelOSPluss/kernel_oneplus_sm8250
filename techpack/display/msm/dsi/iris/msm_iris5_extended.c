@@ -7,6 +7,7 @@
  */
 #include "msm_drv.h"
 #include "msm_kms.h"
+#include "dsi_iris5_ioctl.h"
 
 int msm_ioctl_iris_operate_conf(struct drm_device *dev, void *data,
 				struct drm_file *file)

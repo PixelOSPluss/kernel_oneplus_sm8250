@@ -53,6 +53,7 @@
 #include "sde_dbg.h"
 #if defined(OPLUS_FEATURE_PXLW_IRIS5) || defined(CONFIG_PXLW_SOFT_IRIS)
 #include "dsi/iris/dsi_iris5_api.h"
+#include "dsi/iris/dsi_iris5_ioctl.h"
 #endif
 
 #ifdef OPLUS_FEATURE_ADFR
