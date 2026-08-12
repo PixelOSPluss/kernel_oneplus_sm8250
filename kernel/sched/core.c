@@ -6317,8 +6317,8 @@ long sched_setaffinity(pid_t pid, const struct cpumask *in_mask)
 #endif
 again:
 #ifdef CONFIG_SCHED_WALT
-	cpumask_andnot(&allowed_mask, new_mask, cpu_isolated_mask);
-	dest_cpu = cpumask_any_and(cpu_active_mask, &allowed_mask);
+	cpumask_andnot(allowed_mask, new_mask, cpu_isolated_mask);
+	dest_cpu = cpumask_any_and(cpu_active_mask, allowed_mask);
 	if (dest_cpu < nr_cpu_ids) {
 #endif
 		retval = __set_cpus_allowed_ptr(p, new_mask, true);

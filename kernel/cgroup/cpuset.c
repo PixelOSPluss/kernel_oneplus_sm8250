@@ -1783,6 +1783,11 @@ out_unlock:
 	return retval ?: nbytes;
 }
 
+struct cs_target {
+	const char *name;
+	const char *cpus;
+};
+
 #ifdef CONFIG_CPUSET_ASSIST
 static ssize_t cpuset_write_resmask_assist(struct kernfs_open_file *of,
 					   struct cs_target tgt, size_t nbytes,
@@ -1791,10 +1796,12 @@ static ssize_t cpuset_write_resmask_assist(struct kernfs_open_file *of,
 	pr_info("cpuset_assist: setting %s to %s\n", tgt.name, tgt.cpus);
 	return cpuset_write_resmask(of, tgt.cpus, nbytes, off);
 }
+#endif
 
 static ssize_t cpuset_write_resmask_wrapper(struct kernfs_open_file *of,
 					 char *buf, size_t nbytes, loff_t off)
 {
+#ifdef CONFIG_CPUSET_ASSIST
 	static struct cs_target cs_targets[] = {
 		{ "audio-app",		CONFIG_CPUSET_AUDIO_APP },
 		{ "background",		CONFIG_CPUSET_BG },
