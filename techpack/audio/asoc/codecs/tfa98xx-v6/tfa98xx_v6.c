@@ -1483,9 +1483,9 @@ static ssize_t tfa98xx_dbgfs_r_read(struct file *file, char __user *user_buf,
 	char *str;
 	uint16_t status;
 	int ret;
+	int speakerImpedance = 0;
 #ifdef OPLUS_ARCH_EXTENDS
 	int calibrate_done = 0;
-	int speakerImpedance = 0;
 #endif /* OPLUS_ARCH_EXTENDS */
 
 	mutex_lock(&tfa98xx->dsp_lock);
@@ -4554,7 +4554,6 @@ static int tfa98xx_set_tdm_slot(struct snd_soc_dai *dai, unsigned int tx_mask,
 static int tfa98xx_set_fmt(struct snd_soc_dai *dai, unsigned int fmt)
 {
 	struct tfa98xx *tfa98xx = snd_soc_component_get_drvdata(dai->component);
-	struct snd_soc_component *component = dai->component;
 
 	pr_info("fmt=0x%x\n", fmt);
 
@@ -5204,7 +5203,7 @@ static int tfa98xx_i2c_probe(struct i2c_client *i2c,
 {
 	struct snd_soc_dai_driver *dai;
 	struct tfa98xx *tfa98xx;
-	struct device_node *np = i2c->dev.of_node;
+	struct device_node *np __maybe_unused = i2c->dev.of_node;
 	//int irq_flags;
 	unsigned int reg;
 	int ret;
