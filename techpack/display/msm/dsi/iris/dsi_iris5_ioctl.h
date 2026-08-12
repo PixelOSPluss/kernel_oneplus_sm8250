@@ -20,7 +20,7 @@ struct msmfb_mipi_dsi_cmd {
 	u32 iris_ocp_addr;
 	u32 iris_ocp_size;
 	u32 iris_ocp_value;
-	u32 response;
+	u32 response[4];
 	void __user *payload;
 };
 

@@ -11,6 +11,10 @@
 #include <linux/sched/sysctl.h>
 #include <linux/sched/core_ctl.h>
 
+#ifndef cpu_isolated
+#define cpu_isolated(cpu) (0)
+#endif
+
 #define MAX_NR_CLUSTERS			3
 
 #ifdef CONFIG_HZ_300
