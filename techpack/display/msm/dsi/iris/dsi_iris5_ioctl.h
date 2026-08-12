@@ -11,9 +11,14 @@
 struct msmfb_mipi_dsi_cmd {
 	u32 flags;
 	u32 vc;
+	u32 dtype;
 	u32 data_type;
-	u32 reserved;
+	u32 length;
 	u32 len;
+	u32 reserved;
+	u32 iris_ocp_type;
+	u32 iris_ocp_addr;
+	u32 iris_ocp_size;
 	void __user *payload;
 };
 

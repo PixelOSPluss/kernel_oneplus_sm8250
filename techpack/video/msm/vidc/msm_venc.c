@@ -1984,7 +1984,6 @@ int msm_venc_s_ctrl(struct msm_vidc_inst *inst, struct v4l2_ctrl *ctrl)
 	case V4L2_CID_MPEG_VIDC_VENC_BITRATE_SAVINGS:
 	case V4L2_CID_MPEG_VIDEO_H264_CHROMA_QP_INDEX_OFFSET:
 	case V4L2_CID_MPEG_VIDC_SUPERFRAME:
-	case V4L2_CID_MPEG_VIDC_ENABLE_ONLY_BASE_LAYER_IR:
 		s_vpr_h(sid, "Control set: ID : 0x%x Val : %d\n",
 			ctrl->id, ctrl->val);
 		break;
