@@ -960,7 +960,7 @@ KBUILD_LDFLAGS += $(call cc-option,-mllvm -import-instr-limit=10)
 
 # Check for frame size exceeding threshold during prolog/epilog insertion.
 ifneq ($(CONFIG_FRAME_WARN),0)
-KBUILD_LDFLAGS	+= -plugin-opt=-warn-stack-size=$(CONFIG_FRAME_WARN)
+KBUILD_LDFLAGS	+= $(call ld-option,-plugin-opt=-warn-stack-size=$(CONFIG_FRAME_WARN))
 endif
 endif
 
