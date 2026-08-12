@@ -132,7 +132,7 @@ static void hdd_driver_oplus_procfs_remove(void)
  *
  * Return - 0 on success, error otherwise
  */
-int hdd_driver_oplus_init(void)
+static int hdd_driver_oplus_init(void)
 {
     int status;
 
@@ -152,7 +152,7 @@ int hdd_driver_oplus_init(void)
  *
  * Return: None
  */
-void hdd_driver_oplus_deinit(void)
+static void hdd_driver_oplus_deinit(void)
 {
     hdd_driver_oplus_procfs_remove();
 }
