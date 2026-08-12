@@ -309,13 +309,13 @@ static inline uint64_t __qdf_get_log_timestamp(void)
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0))
 static inline uint64_t __qdf_get_bootbased_boottime_ns(void)
 {
-	return ktime_get_boottime_ns();
+	return ktime_to_ns(ktime_get_boottime());
 }
 
 #elif (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 17, 0))
 static inline uint64_t __qdf_get_bootbased_boottime_ns(void)
 {
-	return ktime_get_boottime_ns();
+	return ktime_to_ns(ktime_get_boottime());
 }
 
 #else
