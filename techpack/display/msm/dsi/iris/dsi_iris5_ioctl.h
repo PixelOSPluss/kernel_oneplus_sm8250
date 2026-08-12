@@ -34,16 +34,27 @@ struct msm_iris_operate_value {
 };
 
 struct msmfb_iris_ambient_info {
-	u32 lux;
-	u32 color_temp;
+	u32 ambient_lux;
+	u32 ambient_bl_ratio;
+	void __user *lut_lut2_payload;
 };
 
 struct msmfb_iris_maxcll_info {
-	u32 max_cll;
+	u32 mMAXCLL;
+	void __user *lut_luty_payload;
+	void __user *lut_lutuv_payload;
 };
 
 #ifndef IRIS_OPRT_TOOL_DSI
 #define IRIS_OPRT_TOOL_DSI 0
+#define IRIS_OPRT_CONFIGURE 1
+#define IRIS_OPRT_CONFIGURE_NEW 2
+#define IRIS_OPRT_CONFIGURE_NEW_GET 3
+#endif
+
+#ifndef DRM_MSM_IRIS_OPERATE_CONF
+#define DRM_MSM_IRIS_OPERATE_CONF 0x30
+#define DRM_MSM_IRIS_OPERATE_TOOL 0x31
 #endif
 
 #ifndef MSMFB_MIPI_DSI_COMMAND_LAST
