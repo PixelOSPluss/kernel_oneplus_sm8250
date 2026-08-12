@@ -49,6 +49,7 @@
 #include <linux/sched.h>
 #include <linux/audit.h>
 #include <linux/mutex.h>
+#include <linux/selinux.h>
 #include <linux/flex_array.h>
 #include <linux/vmalloc.h>
 #include <net/netlabel.h>
@@ -775,7 +776,7 @@ static int security_compute_validatetrans(struct selinux_state *state,
 	int rc = 0;
 
 
-	if (!selinux_initialized(state))
+	if (!state->initialized)
 		return 0;
 
 	read_lock(&state->ss->policy_rwlock);
@@ -875,7 +876,7 @@ int security_bounded_transition(struct selinux_state *state,
 	int index;
 	int rc;
 
-	if (!selinux_initialized(state))
+	if (!state->initialized)
 		return 0;
 
 	read_lock(&state->ss->policy_rwlock);
@@ -1037,7 +1038,7 @@ void security_compute_xperms_decision(struct selinux_state *state,
 	memset(xpermd->dontaudit->p, 0, sizeof(xpermd->dontaudit->p));
 
 	read_lock(&state->ss->policy_rwlock);
-	if (!selinux_initialized(state))
+	if (!state->initialized)
 		goto allow;
 
 	policydb = &state->ss->policydb;
@@ -1126,7 +1127,7 @@ void security_compute_av(struct selinux_state *state,
 	read_lock(&state->ss->policy_rwlock);
 	avd_init(state, avd);
 	xperms->len = 0;
-	if (!selinux_initialized(state))
+	if (!state->initialized)
 		goto allow;
 
 	policydb = &state->ss->policydb;
@@ -1180,7 +1181,7 @@ void security_compute_av_user(struct selinux_state *state,
 
 	read_lock(&state->ss->policy_rwlock);
 	avd_init(state, avd);
-	if (!selinux_initialized(state))
+	if (!state->initialized)
 		goto allow;
 
 	policydb = &state->ss->policydb;
@@ -1283,7 +1284,7 @@ int security_sidtab_hash_stats(struct selinux_state *state, char *page)
 {
 	int rc;
 
-	if (!selinux_initialized(state)) {
+	if (!state->initialized) {
 		pr_err("SELinux: %s:  called before initial load_policy\n",
 		       __func__);
 		return -EINVAL;
@@ -1316,7 +1317,7 @@ static int security_sid_to_context_core(struct selinux_state *state,
 		*scontext = NULL;
 	*scontext_len  = 0;
 
-	if (!selinux_initialized(state)) {
+	if (!state->initialized) {
 		if (sid <= SECINITSID_NUM) {
 			char *scontextp;
 
@@ -1528,7 +1529,7 @@ static int security_context_to_sid_core(struct selinux_state *state,
 			return -ENOMEM;
 	}
 
-	if (!selinux_initialized(state)) {
+	if (!state->initialized) {
 		int i;
 
 		for (i = 1; i < SECINITSID_NUM; i++) {
@@ -1725,7 +1726,7 @@ static int security_compute_sid(struct selinux_state *state,
 	int rc = 0;
 	bool sock;
 
-	if (!selinux_initialized(state)) {
+	if (!state->initialized) {
 		switch (orig_tclass) {
 		case SECCLASS_PROCESS: /* kernel value */
 			*out_sid = ssid;
@@ -2199,7 +2200,7 @@ int security_load_policy(struct selinux_state *state, void *data, size_t len)
 		goto out;
 	}
 
-	if (!selinux_initialized(state)) {
+	if (!state->initialized) {
 		rc = policydb_read(policydb, fp);
 		if (rc) {
 			kfree(newsidtab);
@@ -2224,7 +2225,7 @@ int security_load_policy(struct selinux_state *state, void *data, size_t len)
 
 		state->ss->sidtab = newsidtab;
 		security_load_policycaps(state);
-		selinux_mark_initialized(state);
+		state->initialized = 1;
 		seqno = ++state->ss->latest_granting;
 		selinux_complete_init();
 		avc_ss_reset(state->avc, seqno);
@@ -2646,7 +2647,7 @@ int security_get_user_sids(struct selinux_state *state,
 	*sids = NULL;
 	*nel = 0;
 
-	if (!selinux_initialized(state))
+	if (!state->initialized)
 		goto out;
 
 	read_lock(&state->ss->policy_rwlock);
@@ -2884,7 +2885,7 @@ int security_get_bools(struct selinux_state *state,
 	struct policydb *policydb;
 	int i, rc;
 
-	if (!selinux_initialized(state)) {
+	if (!state->initialized) {
 		*len = 0;
 		*names = NULL;
 		*values = NULL;
@@ -3065,7 +3066,7 @@ int security_sid_mls_copy(struct selinux_state *state,
 #endif
 
 	rc = 0;
-	if (!selinux_initialized(state) || !policydb->mls_enabled) {
+	if (!state->initialized || !policydb->mls_enabled) {
 		*new_sid = sid;
 		goto out;
 	}
@@ -3228,7 +3229,7 @@ int security_get_classes(struct selinux_state *state,
 	struct policydb *policydb = &state->ss->policydb;
 	int rc;
 
-	if (!selinux_initialized(state)) {
+	if (!state->initialized) {
 		*nclasses = 0;
 		*classes = NULL;
 		return 0;
@@ -3377,7 +3378,7 @@ int selinux_audit_rule_init(u32 field, u32 op, char *rulestr, void **vrule)
 
 	*rule = NULL;
 
-	if (!selinux_initialized(state))
+	if (!state->initialized)
 		return -EOPNOTSUPP;
 
 	switch (field) {
@@ -3679,7 +3680,7 @@ int security_netlbl_secattr_to_sid(struct selinux_state *state,
 	struct context *ctx;
 	struct context ctx_new;
 
-	if (!selinux_initialized(state)) {
+	if (!state->initialized) {
 		*sid = SECSID_NULL;
 		return 0;
 	}
@@ -3746,7 +3747,7 @@ int security_netlbl_sid_to_secattr(struct selinux_state *state,
 	int rc;
 	struct context *ctx;
 
-	if (!selinux_initialized(state))
+	if (!state->initialized)
 		return 0;
 
 	read_lock(&state->ss->policy_rwlock);
@@ -3785,7 +3786,7 @@ int security_read_policy(struct selinux_state *state,
 	int rc;
 	struct policy_file fp;
 
-	if (!selinux_initialized(state))
+	if (!state->initialized)
 		return -EINVAL;
 
 	*len = security_policydb_len(state);

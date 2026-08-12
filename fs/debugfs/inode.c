@@ -620,9 +620,12 @@ struct dentry *debugfs_create_symlink(const char *name, struct dentry *parent,
 }
 EXPORT_SYMBOL_GPL(debugfs_create_symlink);
 
-static void __debugfs_file_removed(struct dentry *dentry)
+static void __debugfs_remove_file(struct dentry *dentry, struct dentry *parent)
 {
 	struct debugfs_fsdata *fsd;
+
+	simple_unlink(d_inode(parent), dentry);
+	d_delete(dentry);
 
 	/*
 	 * Paired with the closing smp_mb() implied by a successful
@@ -644,18 +647,16 @@ static int __debugfs_remove(struct dentry *dentry, struct dentry *parent)
 
 	if (simple_positive(dentry)) {
 		dget(dentry);
-		if (d_is_dir(dentry)) {
-			ret = simple_rmdir(d_inode(parent), dentry);
+		if (!d_is_reg(dentry)) {
+			if (d_is_dir(dentry))
+				ret = simple_rmdir(d_inode(parent), dentry);
+			else
+				simple_unlink(d_inode(parent), dentry);
 			if (!ret)
-				fsnotify_rmdir(d_inode(parent), dentry);
+				d_delete(dentry);
 		} else {
-			simple_unlink(d_inode(parent), dentry);
-			fsnotify_unlink(d_inode(parent), dentry);
+			__debugfs_remove_file(dentry, parent);
 		}
-		if (!ret)
-			d_delete(dentry);
-		if (d_is_reg(dentry))
-			__debugfs_file_removed(dentry);
 		dput(dentry);
 	}
 	return ret;

@@ -804,8 +804,6 @@ static void cgroup_update_populated(struct cgroup *cgrp, bool populated)
 			break;
 
 		cgroup1_check_for_release(cgrp);
-		TRACE_CGROUP_PATH(notify_populated, cgrp,
-				  cgroup_is_populated(cgrp));
 		cgroup_file_notify(&cgrp->events_file);
 
 		child = cgrp;
@@ -1295,7 +1293,10 @@ static void cgroup_exit_root_id(struct cgroup_root *root)
 
 void cgroup_free_root(struct cgroup_root *root)
 {
-	kfree(root);
+	if (root) {
+		idr_destroy(&root->cgroup_idr);
+		kfree(root);
+	}
 }
 
 static void cgroup_destroy_root(struct cgroup_root *root)
@@ -1829,12 +1830,6 @@ static int parse_cgroup_root_flags(char *data, unsigned int *root_flags)
 		if (!strcmp(token, "nsdelegate")) {
 			*root_flags |= CGRP_ROOT_NS_DELEGATE;
 			continue;
-		} else if(!strcmp(token, "memory_localevents")) {
-			*root_flags |= CGRP_ROOT_MEMORY_LOCAL_EVENTS;
-			continue;
-		} else if(!strcmp(token, "memory_recursiveprot")) {
-			*root_flags |= CGRP_ROOT_MEMORY_RECURSIVE_PROT;
-			continue;
 		}
 
 		pr_err("cgroup2: unknown option \"%s\"\n", token);
@@ -1851,16 +1846,6 @@ static void apply_cgroup_root_flags(unsigned int root_flags)
 			cgrp_dfl_root.flags |= CGRP_ROOT_NS_DELEGATE;
 		else
 			cgrp_dfl_root.flags &= ~CGRP_ROOT_NS_DELEGATE;
-
-		if (root_flags & CGRP_ROOT_MEMORY_LOCAL_EVENTS)
-			cgrp_dfl_root.flags |= CGRP_ROOT_MEMORY_LOCAL_EVENTS;
-		else
-			cgrp_dfl_root.flags &= ~CGRP_ROOT_MEMORY_LOCAL_EVENTS;
-
-		if (root_flags & CGRP_ROOT_MEMORY_RECURSIVE_PROT)
-			cgrp_dfl_root.flags |= CGRP_ROOT_MEMORY_RECURSIVE_PROT;
-		else
-			cgrp_dfl_root.flags &= ~CGRP_ROOT_MEMORY_RECURSIVE_PROT;
 	}
 }
 
@@ -1868,10 +1853,6 @@ static int cgroup_show_options(struct seq_file *seq, struct kernfs_root *kf_root
 {
 	if (cgrp_dfl_root.flags & CGRP_ROOT_NS_DELEGATE)
 		seq_puts(seq, ",nsdelegate");
-	if (cgrp_dfl_root.flags & CGRP_ROOT_MEMORY_LOCAL_EVENTS)
-		seq_puts(seq, ",memory_localevents");
-	if (cgrp_dfl_root.flags & CGRP_ROOT_MEMORY_RECURSIVE_PROT)
-		seq_puts(seq, ",memory_recursiveprot");
 	return 0;
 }
 
@@ -1980,6 +1961,7 @@ void init_cgroup_root(struct cgroup_root *root, struct cgroup_sb_opts *opts)
 	atomic_set(&root->nr_cgrps, 1);
 	cgrp->root = root;
 	init_cgroup_housekeeping(cgrp);
+	idr_init(&root->cgroup_idr);
 
 	root->flags = opts->flags;
 	if (opts->release_agent)
@@ -1999,6 +1981,12 @@ int cgroup_setup_root(struct cgroup_root *root, u16 ss_mask)
 	int i, ret;
 
 	lockdep_assert_held(&cgroup_mutex);
+
+	ret = cgroup_idr_alloc(&root->cgroup_idr, root_cgrp, 1, 2, GFP_KERNEL);
+	if (ret < 0)
+		goto out;
+	root_cgrp->id = ret;
+	root_cgrp->ancestor_ids[0] = ret;
 
 	ret = percpu_ref_init(&root_cgrp->self.refcnt, css_release,
 			      0, GFP_KERNEL);
@@ -2025,16 +2013,13 @@ int cgroup_setup_root(struct cgroup_root *root, u16 ss_mask)
 
 	root->kf_root = kernfs_create_root(kf_sops,
 					   KERNFS_ROOT_CREATE_DEACTIVATED |
-					   KERNFS_ROOT_SUPPORT_EXPORTOP |
-					   KERNFS_ROOT_SUPPORT_USER_XATTR,
+					   KERNFS_ROOT_SUPPORT_EXPORTOP,
 					   root_cgrp);
 	if (IS_ERR(root->kf_root)) {
 		ret = PTR_ERR(root->kf_root);
 		goto exit_root_id;
 	}
 	root_cgrp->kn = root->kf_root->kn;
-	WARN_ON_ONCE(cgroup_ino(root_cgrp) != 1);
-	root_cgrp->ancestor_ids[0] = cgroup_id(root_cgrp);
 
 	ret = css_populate_dir(&root_cgrp->self);
 	if (ret)
@@ -2044,10 +2029,8 @@ int cgroup_setup_root(struct cgroup_root *root, u16 ss_mask)
 	if (ret)
 		goto destroy_root;
 
-	if (root == &cgrp_dfl_root) {
-		ret = cgroup_bpf_inherit(root_cgrp);
-		WARN_ON_ONCE(ret);
-	}
+	ret = cgroup_bpf_inherit(root_cgrp);
+	WARN_ON_ONCE(ret);
 
 	trace_cgroup_setup_root(root);
 
@@ -2074,6 +2057,7 @@ int cgroup_setup_root(struct cgroup_root *root, u16 ss_mask)
 	BUG_ON(!list_empty(&root_cgrp->self.children));
 	BUG_ON(atomic_read(&root->nr_cgrps) != 1);
 
+	kernfs_activate(root_cgrp->kn);
 	ret = 0;
 	goto out;
 
@@ -3524,24 +3508,15 @@ static int cpu_stat_show(struct seq_file *seq, void *v)
 #ifdef CONFIG_PSI
 static int cgroup_io_pressure_show(struct seq_file *seq, void *v)
 {
-	struct cgroup *cgrp = seq_css(seq)->cgroup;
-	struct psi_group *psi = cgroup_ino(cgrp) == 1 ? &psi_system : &cgrp->psi;
-
-	return psi_show(seq, psi, PSI_IO);
+	return psi_show(seq, &seq_css(seq)->cgroup->psi, PSI_IO);
 }
 static int cgroup_memory_pressure_show(struct seq_file *seq, void *v)
 {
-	struct cgroup *cgrp = seq_css(seq)->cgroup;
-	struct psi_group *psi = cgroup_ino(cgrp) == 1 ? &psi_system : &cgrp->psi;
-
-	return psi_show(seq, psi, PSI_MEM);
+	return psi_show(seq, &seq_css(seq)->cgroup->psi, PSI_MEM);
 }
 static int cgroup_cpu_pressure_show(struct seq_file *seq, void *v)
 {
-	struct cgroup *cgrp = seq_css(seq)->cgroup;
-	struct psi_group *psi = cgroup_ino(cgrp) == 1 ? &psi_system : &cgrp->psi;
-
-	return psi_show(seq, psi, PSI_CPU);
+	return psi_show(seq, &seq_css(seq)->cgroup->psi, PSI_CPU);
 }
 
 static ssize_t cgroup_pressure_write(struct kernfs_open_file *of, char *buf,
@@ -3549,7 +3524,6 @@ static ssize_t cgroup_pressure_write(struct kernfs_open_file *of, char *buf,
 {
 	struct psi_trigger *new;
 	struct cgroup *cgrp;
-	struct psi_group *psi;
 
 	cgrp = cgroup_kn_lock_live(of->kn, false);
 	if (!cgrp)
@@ -3558,8 +3532,7 @@ static ssize_t cgroup_pressure_write(struct kernfs_open_file *of, char *buf,
 	cgroup_get(cgrp);
 	cgroup_kn_unlock(of->kn);
 
-	psi = cgroup_ino(cgrp) == 1 ? &psi_system : &cgrp->psi;
-	new = psi_trigger_create(psi, buf, nbytes, res);
+	new = psi_trigger_create(&cgrp->psi, buf, nbytes, res);
 	if (IS_ERR(new)) {
 		cgroup_put(cgrp);
 		return PTR_ERR(new);
@@ -4893,7 +4866,7 @@ static struct cftype cgroup_base_files[] = {
 #ifdef CONFIG_PSI
 	{
 		.name = "io.pressure",
-		.flags = CFTYPE_PRESSURE,
+		.flags = CFTYPE_NOT_ON_ROOT | CFTYPE_PRESSURE,
 		.seq_show = cgroup_io_pressure_show,
 		.write = cgroup_io_pressure_write,
 		.poll = cgroup_pressure_poll,
@@ -4901,7 +4874,7 @@ static struct cftype cgroup_base_files[] = {
 	},
 	{
 		.name = "memory.pressure",
-		.flags = CFTYPE_PRESSURE,
+		.flags = CFTYPE_NOT_ON_ROOT | CFTYPE_PRESSURE,
 		.seq_show = cgroup_memory_pressure_show,
 		.write = cgroup_memory_pressure_write,
 		.poll = cgroup_pressure_poll,
@@ -4909,7 +4882,7 @@ static struct cftype cgroup_base_files[] = {
 	},
 	{
 		.name = "cpu.pressure",
-		.flags = CFTYPE_PRESSURE,
+		.flags = CFTYPE_NOT_ON_ROOT | CFTYPE_PRESSURE,
 		.seq_show = cgroup_cpu_pressure_show,
 		.write = cgroup_cpu_pressure_write,
 		.poll = cgroup_pressure_poll,
@@ -5028,6 +5001,9 @@ static void css_release_work_fn(struct work_struct *work)
 			tcgrp->nr_dying_descendants--;
 		spin_unlock_irq(&css_set_lock);
 
+		cgroup_idr_remove(&cgrp->root->cgroup_idr, cgrp->id);
+		cgrp->id = -1;
+
 		/*
 		 * There are two control paths which try to determine
 		 * cgroup from dentry without going through kernfs -
@@ -5038,6 +5014,8 @@ static void css_release_work_fn(struct work_struct *work)
 		if (cgrp->kn)
 			RCU_INIT_POINTER(*(void __rcu __force **)&cgrp->kn->priv,
 					 NULL);
+
+		cgroup_bpf_put(cgrp);
 	}
 
 	mutex_unlock(&cgroup_mutex);
@@ -5192,12 +5170,10 @@ err_free_css:
  * it isn't associated with its kernfs_node and doesn't have the control
  * mask applied.
  */
-static struct cgroup *cgroup_create(struct cgroup *parent, const char *name,
-				    umode_t mode)
+static struct cgroup *cgroup_create(struct cgroup *parent)
 {
 	struct cgroup_root *root = parent->root;
 	struct cgroup *cgrp, *tcgrp;
-	struct kernfs_node *kn;
 	int level = parent->level + 1;
 	int ret;
 
@@ -5217,13 +5193,15 @@ static struct cgroup *cgroup_create(struct cgroup *parent, const char *name,
 			goto out_cancel_ref;
 	}
 
-	/* create the directory */
-	kn = kernfs_create_dir(parent->kn, name, mode, cgrp);
-	if (IS_ERR(kn)) {
-		ret = PTR_ERR(kn);
+	/*
+	 * Temporarily set the pointer to NULL, so idr_find() won't return
+	 * a half-baked cgroup.
+	 */
+	cgrp->id = cgroup_idr_alloc(&root->cgroup_idr, NULL, 2, 0, GFP_KERNEL);
+	if (cgrp->id < 0) {
+		ret = -ENOMEM;
 		goto out_stat_exit;
 	}
-	cgrp->kn = kn;
 
 	init_cgroup_housekeeping(cgrp);
 
@@ -5233,13 +5211,11 @@ static struct cgroup *cgroup_create(struct cgroup *parent, const char *name,
 
 	ret = psi_cgroup_alloc(cgrp);
 	if (ret)
-		goto out_kernfs_remove;
+		goto out_idr_free;
 
-	if (cgrp->root == &cgrp_dfl_root) {
-		ret = cgroup_bpf_inherit(cgrp);
-		if (ret)
-			goto out_psi_free;
-	}
+	ret = cgroup_bpf_inherit(cgrp);
+	if (ret)
+		goto out_psi_free;
 
 	/*
 	 * New cgroup inherits effective freeze counter, and
@@ -5259,7 +5235,7 @@ static struct cgroup *cgroup_create(struct cgroup *parent, const char *name,
 
 	spin_lock_irq(&css_set_lock);
 	for (tcgrp = cgrp; tcgrp; tcgrp = cgroup_parent(tcgrp)) {
-		cgrp->ancestor_ids[tcgrp->level] = cgroup_id(tcgrp);
+		cgrp->ancestor_ids[tcgrp->level] = tcgrp->id;
 
 		if (tcgrp != cgrp) {
 			tcgrp->nr_descendants++;
@@ -5289,6 +5265,12 @@ static struct cgroup *cgroup_create(struct cgroup *parent, const char *name,
 	cgroup_get_live(parent);
 
 	/*
+	 * @cgrp is now fully operational.  If something fails after this
+	 * point, it'll be released via the normal destruction path.
+	 */
+	cgroup_idr_replace(&root->cgroup_idr, cgrp, cgrp->id);
+
+	/*
 	 * On the default hierarchy, a child doesn't automatically inherit
 	 * subtree_control from the parent.  Each is configured manually.
 	 */
@@ -5301,8 +5283,8 @@ static struct cgroup *cgroup_create(struct cgroup *parent, const char *name,
 
 out_psi_free:
 	psi_cgroup_free(cgrp);
-out_kernfs_remove:
-	kernfs_remove(cgrp->kn);
+out_idr_free:
+	cgroup_idr_remove(&root->cgroup_idr, cgrp->id);
 out_stat_exit:
 	if (cgroup_on_dfl(parent))
 		cgroup_rstat_exit(cgrp);
@@ -5339,6 +5321,7 @@ fail:
 int cgroup_mkdir(struct kernfs_node *parent_kn, const char *name, umode_t mode)
 {
 	struct cgroup *parent, *cgrp;
+	struct kernfs_node *kn;
 	int ret;
 
 	/* do not accept '\n' to prevent making /proc/<pid>/cgroup unparsable */
@@ -5354,19 +5337,27 @@ int cgroup_mkdir(struct kernfs_node *parent_kn, const char *name, umode_t mode)
 		goto out_unlock;
 	}
 
-	cgrp = cgroup_create(parent, name, mode);
+	cgrp = cgroup_create(parent);
 	if (IS_ERR(cgrp)) {
 		ret = PTR_ERR(cgrp);
 		goto out_unlock;
 	}
 
+	/* create the directory */
+	kn = kernfs_create_dir(parent->kn, name, mode, cgrp);
+	if (IS_ERR(kn)) {
+		ret = PTR_ERR(kn);
+		goto out_destroy;
+	}
+	cgrp->kn = kn;
+
 	/*
 	 * This extra ref will be put in cgroup_free_fn() and guarantees
 	 * that @cgrp->kn is always accessible.
 	 */
-	kernfs_get(cgrp->kn);
+	kernfs_get(kn);
 
-	ret = cgroup_kn_set_ugid(cgrp->kn);
+	ret = cgroup_kn_set_ugid(kn);
 	if (ret)
 		goto out_destroy;
 
@@ -5381,7 +5372,7 @@ int cgroup_mkdir(struct kernfs_node *parent_kn, const char *name, umode_t mode)
 	TRACE_CGROUP_PATH(mkdir, cgrp);
 
 	/* let's create and online css's */
-	kernfs_activate(cgrp->kn);
+	kernfs_activate(kn);
 
 	ret = 0;
 	goto out_unlock;
@@ -5557,9 +5548,6 @@ static int cgroup_destroy_locked(struct cgroup *cgrp)
 	spin_unlock_irq(&css_set_lock);
 
 	cgroup1_check_for_release(parent);
-
-	if (cgrp->root == &cgrp_dfl_root)
-		cgroup_bpf_offline(cgrp);
 
 	/* put the base reference */
 	percpu_ref_kill(&cgrp->self.refcnt);
@@ -5806,7 +5794,8 @@ static int __init cgroup_wq_init(void)
 }
 core_initcall(cgroup_wq_init);
 
-void cgroup_path_from_kernfs_id(u64 id, char *buf, size_t buflen)
+void cgroup_path_from_kernfs_id(const union kernfs_node_id *id,
+					char *buf, size_t buflen)
 {
 	struct kernfs_node *kn;
 
@@ -6363,7 +6352,6 @@ void cgroup_sk_alloc(struct sock_cgroup_data *skcd)
 		cset = task_css_set(current);
 		if (likely(cgroup_tryget(cset->dfl_cgrp))) {
 			skcd->val = (unsigned long)cset->dfl_cgrp;
-			cgroup_bpf_get(cset->dfl_cgrp);
 			break;
 		}
 		cpu_relax();
@@ -6384,48 +6372,40 @@ void cgroup_sk_clone(struct sock_cgroup_data *skcd)
 		 * Don't use cgroup_get_live().
 		 */
 		cgroup_get(sock_cgroup_ptr(skcd));
-		cgroup_bpf_get(sock_cgroup_ptr(skcd));
 	}
 }
 
 void cgroup_sk_free(struct sock_cgroup_data *skcd)
 {
-	struct cgroup *cgrp = sock_cgroup_ptr(skcd);
-
 	if (skcd->no_refcnt)
 		return;
-	cgroup_bpf_put(cgrp);
-	cgroup_put(cgrp);
+
+	cgroup_put(sock_cgroup_ptr(skcd));
 }
 
 #endif	/* CONFIG_SOCK_CGROUP_DATA */
 
 #ifdef CONFIG_CGROUP_BPF
-int cgroup_bpf_attach(struct cgroup *cgrp,
-		      struct bpf_prog *prog, struct bpf_prog *replace_prog,
-		      struct bpf_cgroup_link *link,
-		      enum bpf_attach_type type,
-		      u32 flags)
+int cgroup_bpf_attach(struct cgroup *cgrp, struct bpf_prog *prog,
+		      enum bpf_attach_type type, u32 flags)
 {
 	int ret;
 
 	mutex_lock(&cgroup_mutex);
-	ret = __cgroup_bpf_attach(cgrp, prog, replace_prog, link, type, flags);
+	ret = __cgroup_bpf_attach(cgrp, prog, type, flags);
 	mutex_unlock(&cgroup_mutex);
 	return ret;
 }
-
 int cgroup_bpf_detach(struct cgroup *cgrp, struct bpf_prog *prog,
-		      enum bpf_attach_type type)
+		      enum bpf_attach_type type, u32 flags)
 {
 	int ret;
 
 	mutex_lock(&cgroup_mutex);
-	ret = __cgroup_bpf_detach(cgrp, prog, NULL, type);
+	ret = __cgroup_bpf_detach(cgrp, prog, type, flags);
 	mutex_unlock(&cgroup_mutex);
 	return ret;
 }
-
 int cgroup_bpf_query(struct cgroup *cgrp, const union bpf_attr *attr,
 		     union bpf_attr __user *uattr)
 {
@@ -6486,10 +6466,7 @@ static struct kobj_attribute cgroup_delegate_attr = __ATTR_RO(delegate);
 static ssize_t features_show(struct kobject *kobj, struct kobj_attribute *attr,
 			     char *buf)
 {
-	return snprintf(buf, PAGE_SIZE,
-			"nsdelegate\n"
-			"memory_localevents\n"
-			"memory_recursiveprot\n");
+	return snprintf(buf, PAGE_SIZE, "nsdelegate\n");
 }
 static struct kobj_attribute cgroup_features_attr = __ATTR_RO(features);
 
