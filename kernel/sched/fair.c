@@ -9974,9 +9974,9 @@ static int detach_tasks(struct lb_env *env)
 
 		continue;
 next:
-#ifdef CONFIG_SCHED_WALT
+#if 0
 		trace_sched_load_balance_skip_tasks(env->src_cpu, env->dst_cpu,
-				env->src_grp_type, p->pid, load, task_util(p),
+				0, p->pid, load, task_util(p),
 				cpumask_bits(&p->cpus_allowed)[0]);
 #endif
 		list_move(&p->se.group_node, tasks);
@@ -10535,7 +10535,7 @@ group_is_overloaded(unsigned int imbalance_pct, struct sg_lb_stats *sgs)
 	if (sgs->sum_nr_running <= sgs->group_weight)
 		return false;
 
-#ifdef CONFIG_SCHED_WALT
+#if 0
 	if (env->idle != CPU_NOT_IDLE && walt_rotation_enabled)
 		return true;
 #endif
@@ -11219,6 +11219,7 @@ static inline void update_sd_lb_stats(struct lb_env *env, struct sd_lb_stats *sd
 	 * If the domain util is greater that domain capacity, load balancing
 	 * needs to be done at the next sched domain level as well.
 	 */
+#if 0
 	if (env->sd->parent &&
 	    sds->total_capacity * 1024 < sds->total_util *
 			 sched_capacity_margin_up[group_first_cpu(sds->local)])
@@ -12197,7 +12198,6 @@ static int active_load_balance_cpu_stop(void *data)
 			update_rq_clock(busiest_rq);
 			detach_task(push_task, &env);
 			push_task_detached = 1;
-			moved = true;
 		}
 		goto out_unlock;
 	}
@@ -12457,7 +12457,7 @@ static inline int find_energy_aware_new_ilb(void)
 
 	cpumask_and(&idle_cpus, nohz.idle_cpus_mask,
 			housekeeping_cpumask(HK_FLAG_MISC));
-#ifdef CONFIG_SCHED_WALT
+#if 0
 	cpumask_andnot(&idle_cpus, &idle_cpus, cpu_isolated_mask);
 #endif
 	sg = sd->groups;
