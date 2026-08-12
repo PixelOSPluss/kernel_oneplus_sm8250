@@ -330,6 +330,18 @@ struct sde_encoder_phys {
 	bool in_clone_mode;
 	int vfp_cached;
 	enum frame_trigger_mode_type frame_trigger_mode;
+
+#ifdef OPLUS_FEATURE_ADFR
+	//2 : transferring (wr_ptr_irq)
+	//1 : transfer finish (pp_tx_done_irq)
+	//0 : panel read finish (rd_ptr_irq)
+	//disable qsync or wait vblank to avoid tearing
+	atomic_t frame_state;
+	//threshold for current frame
+	u32 current_sync_threshold_start;
+	//threshold for current qsync mode
+	u32 qsync_sync_threshold_start;
+#endif
 };
 
 static inline int sde_encoder_phys_inc_pending(struct sde_encoder_phys *phys)
@@ -523,6 +535,14 @@ void sde_encoder_phys_setup_cdm(struct sde_encoder_phys *phys_enc,
 		struct sde_rect *wb_roi);
 
 /**
+ * sde_encoder_helper_get_pp_line_count - pingpong linecount helper function
+ * @drm_enc:    Pointer to drm encoder structure
+ * @info:       structure used to populate the pp line count information
+ */
+void sde_encoder_helper_get_pp_line_count(struct drm_encoder *drm_enc,
+		struct sde_hw_pp_vsync_info *info);
+
+/**
  * sde_encoder_helper_trigger_flush - control flush helper function
  *	This helper function may be optionally specified by physical
  *	encoders if they require ctl_flush triggering.
@@ -567,8 +587,6 @@ int sde_encoder_helper_wait_event_timeout(
  */
 void sde_encoder_helper_get_jitter_bounds_ns(struct drm_encoder *encoder,
 			u64 *l_bound, u64 *u_bound);
-
-void sde_encoder_save_vsync_info(struct sde_encoder_phys *phys_enc);
 
 /**
  * sde_encoder_helper_switch_vsync - switch vsync source to WD or default
@@ -774,5 +792,7 @@ void sde_encoder_helper_setup_misr(struct sde_encoder_phys *phys_enc,
  */
 int sde_encoder_helper_collect_misr(struct sde_encoder_phys *phys_enc,
 		bool nonblock, u32 *misr_value);
+
+ktime_t sde_encoder_get_last_vsync_ts_cmd(struct sde_encoder_phys *phys_enc);
 
 #endif /* __sde_encoder_phys_H__ */

@@ -123,19 +123,24 @@ do {                                                    \
 
 #define WCD_MBHC_JACK_MASK (SND_JACK_HEADSET | SND_JACK_OC_HPHL | \
 			   SND_JACK_OC_HPHR | SND_JACK_LINEOUT | \
-			   SND_JACK_MECHANICAL | SND_JACK_MICROPHONE2 | \
+			   SND_JACK_MECHANICAL | \
 			   SND_JACK_UNSUPPORTED)
 
 #define WCD_MBHC_JACK_BUTTON_MASK (SND_JACK_BTN_0 | SND_JACK_BTN_1 | \
 				  SND_JACK_BTN_2 | SND_JACK_BTN_3 | \
 				  SND_JACK_BTN_4 | SND_JACK_BTN_5)
-
-#define WCD_MBHC_JACK_USB_3_5_MASK (SND_JACK_UNSUPPORTED | SND_JACK_HEADSET)
-
 #define OCP_ATTEMPT 20
+#ifndef OPLUS_ARCH_EXTENDS
 #define HS_DETECT_PLUG_TIME_MS (3 * 1000)
+#else /* OPLUS_ARCH_EXTENDS */
+#define HS_DETECT_PLUG_TIME_MS (5 * 1000)
+#endif /* OPLUS_ARCH_EXTENDS */
 #define SPECIAL_HS_DETECT_TIME_MS (2 * 1000)
+#ifndef OPLUS_ARCH_EXTENDS
 #define MBHC_BUTTON_PRESS_THRESHOLD_MIN 250
+#else
+#define MBHC_BUTTON_PRESS_THRESHOLD_MIN 1000
+#endif
 #define GND_MIC_SWAP_THRESHOLD 4
 #define GND_MIC_USBC_SWAP_THRESHOLD 2
 #define WCD_FAKE_REMOVAL_MIN_PERIOD_MS 100
@@ -435,9 +440,6 @@ struct wcd_mbhc_config {
 	bool enable_anc_mic_detect;
 	u32 enable_usbc_analog;
 	bool moisture_duty_cycle_en;
-	int uart_audio_switch_gpio;
-	struct device_node *uart_audio_switch_gpio_p; /* used by pinctrl API */
-	bool flip_switch;
 };
 
 struct wcd_mbhc_intr {
@@ -596,8 +598,13 @@ struct wcd_mbhc {
 
 	struct snd_soc_jack headset_jack;
 	struct snd_soc_jack button_jack;
-	struct snd_soc_jack usb_3_5_jack;
 	struct mutex codec_resource_lock;
+
+#ifdef OPLUS_ARCH_EXTENDS
+	bool use_usbc_detect;
+	bool usbc_analog_status;
+	struct delayed_work mbhc_usbc_detect_dwork;
+#endif /* OPLUS_ARCH_EXTENDS */
 
 	/* Holds codec specific interrupt mapping */
 	const struct wcd_mbhc_intr *intr_ids;
@@ -618,11 +625,29 @@ struct wcd_mbhc {
 
 	unsigned long intr_status;
 	bool is_hph_ocp_pending;
-	int usbc_mode;
+
 	struct wcd_mbhc_fn *mbhc_fn;
 	bool force_linein;
 	struct device_node *fsa_np;
 	struct notifier_block fsa_nb;
+
+#ifdef OPLUS_ARCH_EXTENDS
+	bool need_cross_conn;
+#endif /* OPLUS_ARCH_EXTENDS */
+#ifdef OPLUS_ARCH_EXTENDS
+	struct delayed_work hp_detect_work;
+#endif /* OPLUS_ARCH_EXTENDS */
+#ifdef OPLUS_ARCH_EXTENDS
+	bool irq_trigger_enable;
+	struct delayed_work mech_irq_trigger_dwork;
+#endif /* OPLUS_ARCH_EXTENDS */
+#ifdef OPLUS_ARCH_EXTENDS
+	bool headset_bias_alwayon;
+#endif /* OPLUS_ARCH_EXTENDS */
+
+#ifdef OPLUS_FEATURE_IMPEDANCE_MATCH
+	bool enable_hp_impedance_detect;
+#endif /* OPLUS_FEATURE_IMPEDANCE_MATCH */
 };
 
 void wcd_mbhc_find_plug_and_report(struct wcd_mbhc *mbhc,

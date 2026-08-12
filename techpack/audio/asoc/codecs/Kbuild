@@ -75,22 +75,21 @@ ifeq ($(KERNEL_BUILD), 0)
 		export
 		INCS    +=  -include $(AUDIO_ROOT)/config/sdm660autoconf.h
 	endif
-endif
-
-ifdef CONFIG_BOARD_PSYCHE
-CDEFINES += -DCONFIG_TARGET_PRODUCT_PSYCHE
-endif
-
-ifdef CONFIG_BOARD_MUNCH
-CDEFINES += -DCONFIG_TARGET_PRODUCT_MUNCH
-endif
-
-ifdef CONFIG_BOARD_DAGU
-CDEFINES += -DCONFIG_TARGET_PRODUCT_DAGU
-endif
-
-ifdef CONFIG_BOARD_PIPA
-CDEFINES += -DCONFIG_TARGET_PRODUCT_PIPA
+	ifeq ($(CONFIG_ARCH_SDM450), y)
+		include $(AUDIO_ROOT)/config/sdm450auto.conf
+		export
+		INCS    +=  -include $(AUDIO_ROOT)/config/sdm450autoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_SDM439), y)
+		include $(AUDIO_ROOT)/config/sdm450auto.conf
+		export
+		INCS    +=  -include $(AUDIO_ROOT)/config/sdm450autoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_MSM8917), y)
+		include $(AUDIO_ROOT)/config/sdm450auto.conf
+		export
+		INCS    +=  -include $(AUDIO_ROOT)/config/sdm450autoconf.h
+	endif
 endif
 
 # As per target team, build is done as follows:
@@ -196,7 +195,7 @@ ifdef CONFIG_SND_SOC_WCD_MBHC_LEGACY
 	MBHC_OBJS += wcd-mbhc-legacy.o
 endif
 
-ifdef CONFIG_SND_SOC_HDMI_CODEC
+ifdef CONFIG_SND_SOC_MSM_HDMI_CODEC_RX
 	HDMICODEC_OBJS += msm_hdmi_codec_rx.o
 endif
 
@@ -220,6 +219,8 @@ CDEFINES +=	-DANI_LITTLE_BYTE_ENDIAN \
 		-DANI_OS_TYPE_ANDROID=6 \
 		-DPTT_SOCK_SVC_ENABLE \
 		-Wall\
+		-Werror\
+		-Wno-enum-conversion \
 		-D__linux__
 
 KBUILD_CPPFLAGS += $(CDEFINES)
@@ -247,21 +248,15 @@ ifeq ($(KERNEL_BUILD), 1)
 	obj-y	+= wcd934x/
 	obj-y	+= wcd937x/
 	obj-y	+= wcd938x/
-	obj-y	+= wsa883x/
 	obj-y	+= bolero/
 	obj-y	+= rouleur/
+	obj-y	+= wsa883x/
 	obj-y	+= sdm660_cdc/
-ifneq ($(filter y, $(CONFIG_BOARD_ENUMA) $(CONFIG_BOARD_ELISH) $(CONFIG_BOARD_DAGU)),)
-	obj-y	+= cs35l41_k81/
-else ifneq ($(filter y, $(CONFIG_BOARD_ALIOTH) $(CONFIG_BOARD_APOLLO)),)
-	obj-y	+= cs35l41/
-else ifeq ($(CONFIG_BOARD_PIPA), y)
-	obj-y	+= aw882xx/
-else ifeq ($(CONFIG_BOARD_MUNCH), y)
-	obj-y	+= tfa9874/
-else ifeq ($(CONFIG_BOARD_LMI), y)
-	obj-y	+= tfa98xx/
-endif	
+#ifdef OPLUS_ARCH_EXTENDS
+ifdef CONFIG_SND_SOC_TFA98XX
+	obj-y	+= tfa98xx-v6/
+endif
+#endif
 endif
 # Module information used by KBuild framework
 obj-$(CONFIG_WCD9XXX_CODEC_CORE) += wcd_core_dlkm.o
@@ -292,5 +287,5 @@ wcd_spi_dlkm-y := $(SPI_OBJS)
 obj-$(CONFIG_SND_SOC_WCD_MBHC) += mbhc_dlkm.o
 mbhc_dlkm-y := $(MBHC_OBJS)
 
-obj-$(CONFIG_SND_SOC_HDMI_CODEC) += hdmi_dlkm.o
+obj-$(CONFIG_SND_SOC_MSM_HDMI_CODEC_RX) += hdmi_dlkm.o
 hdmi_dlkm-y := $(HDMICODEC_OBJS)

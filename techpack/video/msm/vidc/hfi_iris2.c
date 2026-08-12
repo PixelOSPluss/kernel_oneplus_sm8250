@@ -2,10 +2,10 @@
 /*
  * Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
  */
+#include <linux/kernel.h>
 
 #include "msm_vidc_debug.h"
 #include "hfi_common.h"
-#include <linux/kernel.h>
 
 #define VBIF_BASE_OFFS_IRIS2			0x00080000
 

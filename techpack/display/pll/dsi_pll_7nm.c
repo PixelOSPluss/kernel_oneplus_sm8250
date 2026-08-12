@@ -594,11 +594,6 @@ static void dsi_pll_setup_config(struct dsi_pll_7nm *pll,
 	config->enable_ssc = rsc->ssc_en;
 	config->ssc_center = rsc->ssc_center;
 
-	if (pll->cphy_enabled) {
-		config->enable_ssc = false;
-		pr_info("[7nm] disable pll ssc %d\n", config->enable_ssc);
-	}
-
 	if (config->enable_ssc) {
 		if (rsc->ssc_freq)
 			config->ssc_freq = rsc->ssc_freq;
@@ -1060,9 +1055,15 @@ static int dsi_pll_read_stored_trim_codes(struct mdss_pll_resources *pll_res,
 			codes_info->pll_codes.pll_codes_2,
 			codes_info->pll_codes.pll_codes_3);
 
+#ifdef OPLUS_BUG_STABILITY
+		if ((vco_clk_rate / 1000) != (codes_info->clk_rate / 1000) &&
+				codes_info->is_valid)
+			continue;
+#else
 		if (vco_clk_rate != codes_info->clk_rate &&
 				codes_info->is_valid)
 			continue;
+#endif /* OPLUS_BUG_STABILITY */
 
 		pll_res->cache_pll_trim_codes[0] =
 			codes_info->pll_codes.pll_codes_1;

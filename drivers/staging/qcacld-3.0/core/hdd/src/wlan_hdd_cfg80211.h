@@ -139,7 +139,13 @@ hdd_convert_cfgdot11mode_to_80211mode(enum csr_cfgdot11mode mode);
 
 #define HDD_SET_BIT(__param, __val)    ((__param) |= (1 << (__val)))
 
+#ifndef OPLUS_BUG_STABILITY
+//Modify for scan more hidden AP
 #define MAX_SCAN_SSID 10
+#else /* OPLUS_BUG_STABILITY */
+#define MAX_SCAN_SSID 16
+#endif /* OPLUS_BUG_STABILITY */
+
 
 #define IS_CHANNEL_VALID(channel) ((channel >= 0 && channel < 15) \
 			|| (channel >= 36 && channel <= 184))
@@ -364,14 +370,14 @@ int wlan_hdd_send_avoid_freq_event(struct hdd_context *hdd_ctx,
 /**
  * wlan_hdd_send_hang_reason_event() - Send hang reason to the userspace
  * @hdd_ctx: Pointer to hdd context
- * @qdf_hang_reason: qdf hang reason
+ * @reason: cds recovery reason
  * @data: Hang Data
  * @data_len: Hang Data len
  *
  * Return: 0 on success or failure reason
  */
 int wlan_hdd_send_hang_reason_event(struct hdd_context *hdd_ctx,
-				    enum qdf_hang_reason, uint8_t *data,
+				    uint32_t reason, uint8_t *data,
 				    size_t data_len);
 
 int wlan_hdd_send_avoid_freq_for_dnbs(struct hdd_context *hdd_ctx,

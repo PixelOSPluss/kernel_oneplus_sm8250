@@ -19,6 +19,9 @@
 #include "dsi_ctrl.h"
 #include "dsi_phy.h"
 #include "dsi_panel.h"
+#ifdef OPLUS_BUG_STABILITY
+#include "oplus_dsi_support.h"
+#endif /*OPLUS_BUG_STABILITY*/
 
 #define MAX_DSI_CTRLS_PER_DISPLAY             2
 #define DSI_CLIENT_NAME_SIZE		20
@@ -188,9 +191,6 @@ struct dsi_display_ext_bridge {
  * @queue_cmd_waits   Indicates if wait for dma commands done has to be queued.
  * @dma_cmd_workq:	Pointer to the workqueue of DMA command transfer done
  *				wait sequence.
- * @tx_cmd_buf_ndx:   Index to the DSI debugfs TX CMD buffer.
- * @cmd_set:	      Debugfs TX cmd set.
- * @enabled:	      Boolean to indicate display enabled.
  */
 struct dsi_display {
 	struct platform_device *pdev;
@@ -275,14 +275,27 @@ struct dsi_display {
 
 	u32 te_source;
 	u32 clk_gating_config;
+#if defined(OPLUS_FEATURE_PXLW_IRIS5)
+	u32 off;
+	u32 cnt;
+	u8 cmd_data_type;
+#endif
 	bool queue_cmd_waits;
 	struct workqueue_struct *dma_cmd_workq;
 
-	int tx_cmd_buf_ndx;
-	struct dsi_panel_cmd_set cmd_set;
+#ifdef OPLUS_BUG_STABILITY
+	struct completion switch_te_gate;
+	bool vsync_switch_pending;
+#endif
 
-	bool enabled;
-	atomic_t fod_ui;
+#ifdef OPLUS_FEATURE_ADFR
+	/* save qsync info, then restore qsync status after panel enable*/
+	bool need_qsync_restore;
+	/* force close qysnc window when qsync mode is on before panel enable */
+	bool force_qsync_mode_off;
+	uint32_t current_qsync_mode;
+	uint32_t current_qsync_dynamic_min_fps;
+#endif /* OPLUS_FEATURE_ADFR */
 };
 
 int dsi_display_dev_probe(struct platform_device *pdev);
@@ -666,17 +679,6 @@ int dsi_display_cmd_transfer(struct drm_connector *connector,
 		u32 cmd_buf_len);
 
 /**
- * dsi_display_cmd_receive() - receive response from the panel
- * @display:            Handle to display.
- * @cmd_buf:            Command buffer
- * @cmd_buf_len:        Command buffer length in bytes
- * @recv_buf:           Receive buffer
- * @recv_buf_len:       Receive buffer length in bytes
- */
-int dsi_display_cmd_receive(void *display, const char *cmd_buf,
-			    u32 cmd_buf_len, u8 *recv_buf, u32 recv_buf_len);
-
-/**
  * dsi_display_soft_reset() - perform a soft reset on DSI controller
  * @display:         Handle to display
  *
@@ -745,6 +747,14 @@ enum dsi_pixel_format dsi_display_get_dst_format(
  * Return: Zero on Success
  */
 int dsi_display_cont_splash_config(void *display);
+#ifdef OPLUS_BUG_STABILITY
+struct dsi_display *get_main_display(void);
+
+/* Add for implement panel register read */
+int dsi_host_alloc_cmd_tx_buffer(struct dsi_display *display);
+int dsi_display_cmd_engine_enable(struct dsi_display *display);
+int dsi_display_cmd_engine_disable(struct dsi_display *display);
+#endif
 /*
  * dsi_display_get_panel_vfp - get panel vsync
  * @display: Pointer to private display structure
@@ -755,20 +765,6 @@ int dsi_display_cont_splash_config(void *display);
 int dsi_display_get_panel_vfp(void *display,
 	int h_active, int v_active);
 
-int dsi_display_cmd_engine_enable(struct dsi_display *display);
-int dsi_display_cmd_engine_disable(struct dsi_display *display);
-int dsi_host_alloc_cmd_tx_buffer(struct dsi_display *display);
-
-char *dsi_display_get_cmdline_panel_info(void);
-
-int dsi_display_hbm_set_disp_param(struct drm_connector *connector,
-				u32 param_type);
-
-int dsi_display_esd_irq_ctrl(struct dsi_display *display,
-		bool enable);
-
-struct dsi_display *get_main_display(void);
-
-void dsi_display_set_fod_ui(struct dsi_display *display, bool status);
-
+int dsi_display_register_read(struct dsi_display *dsi_display,
+			      unsigned char registers, char *buf, size_t count);
 #endif /* _DSI_DISPLAY_H_ */

@@ -2,6 +2,12 @@
 ccflags-y := -I$(srctree)/include/drm -I$(srctree)/techpack/display/msm -I$(srctree)/techpack/display/msm/dsi -I$(srctree)/techpack/display/msm/dp
 ccflags-y += -I$(srctree)/techpack/display/msm/sde
 ccflags-y += -I$(srctree)/techpack/display/rotator
+ccflags-y += -I$(srctree)/techpack/display/oplus
+
+ifeq ($(OPLUS_FEATURE_PXLW_IRIS5),yes)
+ccflags-y += -I$(srctree)/techpack/display/msm/dsi/iris
+ccflags-y += -DOPLUS_FEATURE_PXLW_IRIS5
+endif #/* OPLUS_FEATURE_PXLW_IRIS5 */
 
 msm_drm-$(CONFIG_DRM_MSM_DP) += dp/dp_usbpd.o \
 	dp/dp_parser.o \
@@ -22,8 +28,6 @@ msm_drm-$(CONFIG_DRM_MSM_DP) += dp/dp_usbpd.o \
 	dp/dp_drm.o \
 	dp/dp_hdcp2p2.o \
 	dp/dp_mst_drm.o \
-	sde_hdcp_1x.o \
-	sde_hdcp_2x.o \
 
 msm_drm-$(CONFIG_DRM_MSM_SDE) += sde/sde_crtc.o \
 	sde/sde_encoder.o \
@@ -37,16 +41,16 @@ msm_drm-$(CONFIG_DRM_MSM_SDE) += sde/sde_crtc.o \
 	sde/sde_kms.o \
 	sde/sde_plane.o \
 	sde/sde_connector.o \
-	sde/clone_cooling_device.o \
 	sde/sde_color_processing.o \
 	sde/sde_vbif.o \
-	xiaomi_frame_stat.o \
 	sde_io_util.o \
 	sde/sde_hw_reg_dma_v1_color_proc.o \
 	sde/sde_hw_color_proc_v4.o \
 	sde/sde_hw_ad4.o \
 	sde/sde_hw_uidle.o \
 	sde_edid_parser.o \
+	sde_hdcp_1x.o \
+	sde_hdcp_2x.o \
 	sde/sde_hw_catalog.o \
 	sde/sde_hw_cdm.o \
 	sde/sde_hw_dspp.o \
@@ -70,10 +74,9 @@ msm_drm-$(CONFIG_DRM_MSM_SDE) += sde/sde_crtc.o \
 	sde/sde_hw_ds.o \
 	sde/sde_fence.o \
 	sde/sde_hw_qdss.o \
-	sde/sde_hw_rc.o
-
-msm_drm-$(CONFIG_DEBUG_FS) += sde_dbg.o \
+	sde_dbg.o \
 	sde_dbg_evtlog.o \
+	sde/sde_hw_rc.o \
 
 msm_drm-$(CONFIG_DRM_SDE_WB) += sde/sde_wb.o \
 	sde/sde_encoder_phys_wb.o \
@@ -81,8 +84,6 @@ msm_drm-$(CONFIG_DRM_SDE_WB) += sde/sde_wb.o \
 msm_drm-$(CONFIG_DRM_SDE_RSC) += sde_rsc.o \
 	sde_rsc_hw.o \
 	sde_rsc_hw_v3.o \
-
-msm_drm-$(CONFIG_DRM_SDE_EXPO) += sde/sde_expo_dim_layer.o
 
 msm_drm-$(CONFIG_DRM_MSM_DSI) += dsi/dsi_phy.o \
 	dsi/dsi_pwr.o \
@@ -105,9 +106,32 @@ msm_drm-$(CONFIG_DRM_MSM_DSI) += dsi/dsi_phy.o \
 	dsi/dsi_panel.o \
 	dsi/dsi_clk_manager.o \
 	dsi/dsi_display_test.o \
-	dsi/dsi_display_mi.o \
-	dsi/dsi_panel_mi.o \
-	dsi/mi_disp_lhbm.o \
+	dsi/ktz8866_init.o \
+
+#ifeq ($(OPLUS_FEATURE_PXLW_IRIS5),y)
+msm_drm-$(CONFIG_DRM_MSM_DSI) += \
+	dsi/iris/dsi_iris5_ioctl.o \
+	dsi/iris/dsi_iris5_lightup.o \
+	dsi/iris/dsi_iris5_lightup_ocp.o \
+	dsi/iris/dsi_iris5_lp.o \
+	dsi/iris/dsi_iris5_lut.o \
+	dsi/iris/dsi_iris5_pq.o \
+	dsi/iris/dsi_iris5_mode_switch.o \
+	dsi/iris/dsi_iris5_cmds.o \
+	dsi/iris/dsi_iris5_i3c.o \
+	dsi/iris/dsi_iris5_i2c.o \
+	dsi/iris/dsi_iris5_loop_back.o \
+	dsi/iris/dsi_iris5_gpio.o \
+	dsi/iris/dsi_iris5_frc.o \
+	dsi/iris/dsi_iris5_timing_switch.o \
+	dsi/iris/dsi_iris5_dbg.o \
+	dsi/iris/msm_iris5_extended.o \
+	dsi/iris/sde_iris5_extended.o \
+	dsi/iris/dsi_iris5_extended.o
+
+ccflags-y += -DOPLUS_FEATURE_PXLW_IRIS5
+ccflags-y += -DPXLW_IRIS_DUAL
+#endif
 
 msm_drm-$(CONFIG_DSI_PARSER) += dsi/dsi_parser.o \
 
@@ -124,5 +148,27 @@ msm_drm-$(CONFIG_DRM_MSM) += \
 	msm_notifier.o\
 
 obj-$(CONFIG_DRM_MSM)	+= msm_drm.o
+
+#ifdef OPLUS_BUG_STABILITY
+msm_drm-$(CONFIG_DRM_OPLUS) += \
+	../oplus/oplus_dsi_support.o \
+	../oplus/oplus_display_private_api.o \
+	../oplus/oplus_dc_diming.o \
+	../oplus/oplus_onscreenfingerprint.o \
+	../oplus/oplus_aod.o \
+	../oplus/oplus_ffl.o \
+	../oplus/oplus_display_panel.o \
+	../oplus/oplus_display_panel_power.o \
+	../oplus/oplus_display_panel_seed.o \
+	../oplus/oplus_display_panel_common.o \
+	../oplus/oplus_display_panel_hbm.o \
+	../oplus/oplus_display_panel_cabc.o
+#endif /*OPLUS_BUG_STABILITY*/
+
+ifeq ($(OPLUS_FEATURE_ADFR_KERNEL),yes)
+msm_drm-$(CONFIG_DRM_OPLUS) += ../oplus/oplus_adfr.o
+endif #/* OPLUS_FEATURE_ADFR_KERNEL */
+
+msm_drm-$(CONFIG_DRM_OPLUS_NOTIFY) += ../oplus/oplus_notify.o
 
 obj-$(CONFIG_DRM_FBDEV_EMULATION) += msm_fbdev.o

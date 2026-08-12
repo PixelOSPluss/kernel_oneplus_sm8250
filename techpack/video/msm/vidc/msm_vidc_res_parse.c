@@ -805,6 +805,9 @@ int read_platform_resources_from_drv_data(
 	res->debug_timeout = find_key_value(platform_data,
 			"qcom,debug-timeout");
 
+	res->pm_qos_latency_us = find_key_value(platform_data,
+			"qcom,pm-qos-latency-us");
+
 	res->max_secure_inst_count = find_key_value(platform_data,
 			"qcom,max-secure-instances");
 
@@ -1031,8 +1034,9 @@ static int msm_vidc_setup_context_bank(struct msm_vidc_platform_resources *res,
 
 	d_vpr_h("Attached %s and created mapping\n", dev_name(dev));
 	d_vpr_h(
-	    "Context bank: %s, buffer_type: %#x, is_secure: %d, addr start: %#x, size: %#x",
-	    cb->name, cb->buffer_type, cb->is_secure, cb->addr_range.start, cb->addr_range.size);
+		"Context bank: %s, buffer_type: %#x, is_secure: %d, address range start: %#x, size: %#x, dev: %pK, domain: %pK",
+		cb->name, cb->buffer_type, cb->is_secure, cb->addr_range.start,
+		cb->addr_range.size, cb->dev, cb->domain);
 
 remove_cb:
 	return rc;
