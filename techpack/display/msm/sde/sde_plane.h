@@ -36,7 +36,6 @@
 #define SDE_PLANE_DIRTY_VIG_IGC 0x40
 #define SDE_PLANE_DIRTY_DMA_IGC 0x80
 #define SDE_PLANE_DIRTY_DMA_GC 0x100
-#define SDE_PLANE_DIRTY_QOS     0x200
 #define SDE_PLANE_DIRTY_CP (SDE_PLANE_DIRTY_VIG_GAMUT |\
 		SDE_PLANE_DIRTY_VIG_IGC | SDE_PLANE_DIRTY_DMA_IGC |\
 		SDE_PLANE_DIRTY_DMA_GC)
@@ -97,6 +96,9 @@ struct sde_plane_state {
 	bool const_alpha_en;
 	bool pending;
 	bool defer_prepare_fb;
+#ifdef OPLUS_BUG_STABILITY
+	bool is_skip;
+#endif /* OPLUS_BUG_STABILITY */
 	uint32_t pipe_order_flags;
 
 	/* scaler configuration */
@@ -219,6 +221,10 @@ int sde_plane_validate_multirect_v2(struct sde_multirect_plane_states *plane);
  */
 void sde_plane_clear_multirect(const struct drm_plane_state *drm_state);
 
+#ifdef OPLUS_BUG_STABILITY
+int sde_plane_check_fingerprint_layer(const struct drm_plane_state *drm_state);
+#endif
+
 /**
  * sde_plane_validate_src_addr - validate if current sspp addr of given
  * plane is within the input address range
@@ -308,13 +314,5 @@ void sde_plane_setup_src_split_order(struct drm_plane *plane,
  * Returns: true if sys cache is required, otherwise false.
  */
 bool sde_plane_is_cache_required(struct drm_plane *plane);
-
-/*
- * sde_plane_get_mi_layer_info - get mi layer info
- * @plane: Pointer to DRM plane object
- */
-uint32_t sde_plane_get_mi_layer_info(const struct drm_plane_state *drm_state);
-
-int sde_plane_is_fod_layer(const struct drm_plane_state *drm_state);
 
 #endif /* _SDE_PLANE_H_ */

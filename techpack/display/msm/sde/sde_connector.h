@@ -18,7 +18,6 @@
 
 #define SDE_CONNECTOR_NAME_SIZE	16
 #define SDE_CONNECTOR_DHDR_MEMPOOL_MAX_SIZE	SZ_32
-#define MAX_CMD_RECEIVE_SIZE       256
 
 struct sde_connector;
 struct sde_connector_state;
@@ -264,18 +263,6 @@ struct sde_connector_ops {
 	int (*cmd_transfer)(struct drm_connector *connector,
 			void *display, const char *cmd_buf,
 			u32 cmd_buf_len);
-	/**
-	 * cmd_receive - Receive the response from the connected display panel
-	 * @display: Pointer to private display handle
-	 * @cmd_buf: Command buffer
-	 * @cmd_buf_len: Command buffer length in bytes
-	 * @recv_buf: rx buffer
-	 * @recv_buf_len: rx buffer length
-	 * Returns: number of bytes read, if successful, negative for failure
-	 */
-
-	int (*cmd_receive)(void *display, const char *cmd_buf,
-			   u32 cmd_buf_len, u8 *recv_buf, u32 recv_buf_len);
 
 	/**
 	 * config_hdr - configure HDR
@@ -402,22 +389,6 @@ struct sde_connector_dyn_hdr_metadata {
 	bool dynamic_hdr_update;
 };
 
-enum mi_dimlayer_type {
-	MI_DIMLAYER_NULL = 0x0,
-	MI_DIMLAYER_FOD_HBM_OVERLAY = 0x1,
-	MI_DIMLAYER_FOD_ICON = 0x2,
-	MI_DIMLAYER_AOD = 0x4,
-	MI_LAYER_FOD_ANIM = 0x8,
-	MI_FOD_UNLOCK_SUCCESS = 0x10,
-	MI_DIMLAYER_MAX,
-};
-
-struct mi_dimlayer_state
-{
-	enum mi_dimlayer_type mi_dimlayer_type;
-	uint32_t current_backlight;
-};
-
 /**
  * struct sde_connector - local sde connector structure
  * @base: Base drm connector structure
@@ -462,9 +433,6 @@ struct mi_dimlayer_state
  * last_cmd_tx_sts: status of the last command transfer
  * @hdr_capable: external hdr support present
  * @core_clk_rate: MDP core clk rate used for dynamic HDR packet calculation
- * @mi_dimlayer_state: mi dimlayer state
- * @cmd_rx_buf: the return buffer of response of command transfer
- * @rx_len: the length of dcs command received buffer
  */
 struct sde_connector {
 	struct drm_connector base;
@@ -500,7 +468,6 @@ struct sde_connector {
 	spinlock_t event_lock;
 
 	struct backlight_device *bl_device;
-	struct sde_clone_cdev *cdev_clone;
 	struct delayed_work status_work;
 	u32 esd_status_interval;
 	bool panel_dead;
@@ -511,21 +478,38 @@ struct sde_connector {
 	u32 bl_scale_sv;
 	u32 unset_bl_level;
 	bool allow_bl_update;
+#ifdef OPLUS_FEATURE_AOD_RAMLESS
+	struct workqueue_struct *update_bl_workq;
+	struct work_struct update_bl_work;
+#endif
 
 	u32 qsync_mode;
 	bool qsync_updated;
-
+#ifdef OPLUS_FEATURE_ADFR
+	u32 qsync_dynamic_min_fps;
+	/* store the min fps value for next window setting */
+	u32 qsync_curr_dynamic_min_fps;
+	/* deferred min fps window setting status */
+	u32 qsync_deferred_window_status;
+#endif /* OPLUS_FEATURE_ADFR */
 	bool colorspace_updated;
 
 	bool last_cmd_tx_sts;
 	bool hdr_capable;
-
-	struct mi_dimlayer_state mi_dimlayer_state;
-	u32 fod_frame_count;
-
-	u8 cmd_rx_buf[MAX_CMD_RECEIVE_SIZE];
-	int rx_len;
 };
+
+#ifdef OPLUS_BUG_STABILITY
+/* DC backlight sync */
+struct dc_apollo_pcc_sync {
+	wait_queue_head_t bk_wait;
+	int dc_pcc_updated;
+	__u32 pcc;
+	__u32 pcc_last;
+	__u32 pcc_current;
+	struct mutex lock;
+	int backlight_pending;
+};
+#endif
 
 /**
  * to_sde_connector - convert drm_connector pointer to sde connector pointer
@@ -565,6 +549,16 @@ struct sde_connector {
  */
 #define sde_connector_get_qsync_mode(C) \
 	((C) ? to_sde_connector((C))->qsync_mode : 0)
+
+#ifdef OPLUS_FEATURE_ADFR
+/**
+ * sde_connector_get_qsync_dynamic_min_fps - get sde connector's qsync_dynamic_min_fps
+ * @C: Pointer to drm connector structure
+ * Returns: Current cached qsync_dynamic_min_fps for given connector
+ */
+#define sde_connector_get_qsync_dynamic_min_fps(C) \
+	((C) ? to_sde_connector((C))->qsync_dynamic_min_fps : 0)
+#endif
 
 /**
  * sde_connector_get_propinfo - get sde connector's property info pointer
@@ -1009,22 +1003,9 @@ int sde_connector_get_panel_vfp(struct drm_connector *connector,
  * @connector: Pointer to DRM connector object
  */
 int sde_connector_esd_status(struct drm_connector *connector);
-/**
- * sde_connector_hbm_ctl - mi function to control hbm
- * @connector: Pointer to DRM connector object
- * @op_code: hbm operation code
- */
-int sde_connector_hbm_ctl(struct drm_connector *connector, uint32_t op_code);
 
-int sde_connector_pre_hbm_ctl(struct drm_connector *connector);
-
-void sde_connector_mi_update_dimlayer_state(struct drm_connector *connector,
-	enum mi_dimlayer_type mi_dimlayer_type);
-
-void sde_connector_mi_get_current_backlight(struct drm_connector *connector, uint32_t *brightness);
-
-void sde_connector_mi_get_current_alpha(struct drm_connector *connector, uint32_t brightness, uint32_t *alpha);
-
-void sde_connector_fod_notify(struct drm_connector *connector);
+#ifdef OPLUS_BUG_STABILITY
+int _sde_connector_update_bl_scale_(struct sde_connector *c_conn);
+#endif
 
 #endif /* _SDE_CONNECTOR_H_ */

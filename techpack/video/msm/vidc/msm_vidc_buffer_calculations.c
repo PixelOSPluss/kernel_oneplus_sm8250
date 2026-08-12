@@ -680,15 +680,7 @@ int msm_vidc_calculate_input_buffer_count(struct msm_vidc_inst *inst)
 	fmt->count_min_host = fmt->count_actual =
 		fmt->count_min + extra_buff_count;
 
-	if (is_grid_session(inst)) {
-                fmt->count_min = fmt->count_min_host =
-			MIN_INPUT_BUFFERS;
-                s_vpr_h(inst->sid,
-			"%s: update HEIC input buffer count to 4\n",
-			__func__);
-        }
-
-        s_vpr_h(inst->sid, "%s: input min %d min_host %d actual %d\n",
+	s_vpr_h(inst->sid, "%s: input min %d min_host %d actual %d\n",
 		__func__, fmt->count_min,
 		fmt->count_min_host, fmt->count_actual);
 
@@ -956,7 +948,7 @@ u32 msm_vidc_calculate_dec_input_frame_size(struct msm_vidc_inst *inst)
 			div_factor = 2;
 	}
 
-	if (is_secure_session(inst) && num_mbs >= NUM_MBS_720P)
+	if (is_secure_session(inst))
 		div_factor = div_factor << 1;
 
 	/* For targets that doesn't support 4k, consider max mb's for that

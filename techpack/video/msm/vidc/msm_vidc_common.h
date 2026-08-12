@@ -157,7 +157,10 @@ static inline bool is_encode_session(struct msm_vidc_inst *inst)
 {
 	return inst->session_type == MSM_VIDC_ENCODER;
 }
-
+static inline bool is_supported_session(struct msm_vidc_inst *inst)
+{
+	return inst->supported;
+}
 static inline bool is_primary_output_mode(struct msm_vidc_inst *inst)
 {
 	return inst->stream_output_mode == HAL_VIDEO_DECODER_PRIMARY;
@@ -273,7 +276,7 @@ int msm_comm_suspend(int core_id);
 int msm_comm_reset_bufreqs(struct msm_vidc_inst *inst,
 	enum hal_buffer buf_type);
 struct hal_buffer_requirements *get_buff_req_buffer(
-			struct msm_vidc_inst *inst, enum hal_buffer buffer_type);
+			struct msm_vidc_inst *inst, u32 buffer_type);
 #define IS_PRIV_CTRL(idx) (\
 		(V4L2_CTRL_ID2WHICH(idx) == V4L2_CTRL_CLASS_MPEG) && \
 		V4L2_CTRL_DRIVER_PRIV(idx))

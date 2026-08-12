@@ -18,13 +18,6 @@
 #include "msm_cvp_internal.h"
 #include "msm_vidc_buffer_calculations.h"
 
-static struct kmem_cache *kmem_buf_pool;
-
-void __init init_vidc_kmem_buf_pool(void)
-{
-	kmem_buf_pool = KMEM_CACHE(msm_vidc_buffer, SLAB_HWCACHE_ALIGN | SLAB_PANIC);
-}
-
 #define IS_ALREADY_IN_STATE(__p, __d) (\
 	(__p >= __d)\
 )
@@ -824,8 +817,8 @@ int msm_comm_get_inst_load(struct msm_vidc_inst *inst,
 	 *                 |          res * max(op, fps)|
 	 * ----------------|----------------------------|
 	 */
-
-	if (is_thumbnail_session(inst) ||
+	if (!is_supported_session(inst) ||
+		is_thumbnail_session(inst) ||
 		(!is_realtime_session(inst) &&
 		 quirks == LOAD_ADMISSION_CONTROL)) {
 		load = 0;
@@ -865,7 +858,6 @@ int msm_comm_get_device_load(struct msm_vidc_core *core,
 	list_for_each_entry(inst, &core->instances, list) {
 		if (inst->session_type != sess_type)
 			continue;
-
 		if (load_type == MSM_VIDC_VIDEO && !is_video_session(inst))
 			continue;
 		else if (load_type == MSM_VIDC_IMAGE && !is_grid_session(inst))
@@ -2760,7 +2752,7 @@ exit:
 	put_inst(inst);
 }
 
-void handle_cmd_response(enum hal_command_response cmd, void *data)
+void handle_cmd_response(u32 cmd, void *data)
 {
 	switch (cmd) {
 	case HAL_SYS_INIT_DONE:
@@ -3366,11 +3358,10 @@ static void msm_comm_print_mem_usage(struct msm_vidc_core *core)
 
 	d_vpr_e("Running instances - mem breakup:\n");
 	d_vpr_e(
-	    "%.5s|%.5s|%.7s|%.7s|%.7s|%.7s|%.7s|%.5s|%.5s|%.5s|%.8s|%.8s|%.8s|%.5s\n",
-	    "w", "h", "in", "extra_in", "out", "extra_out",
-	    "out2", "scratch", "scratch_1", "scratch_2",
- 	    "persist", "persist_1", "recon", "total_kb");
-
+		"%4s|%4s|%24s|%24s|%24s|%24s|%24s|%10s|%10s|%10s|%10s|%10s|%10s|%10s\n",
+		"w", "h", "in", "extra_in", "out", "extra_out",
+		"out2", "scratch", "scratch_1", "scratch_2",
+		"persist", "persist_1", "recon", "total_kb");
 	mutex_lock(&core->lock);
 	list_for_each_entry(inst, &core->instances, list) {
 		dpb_cnt = dpb_size = total = 0;
@@ -3443,10 +3434,18 @@ static void msm_comm_print_mem_usage(struct msm_vidc_core *core)
 			sz_p1 * cnt_p1 + sz_r * cnt_r;
 		total = total >> 10;
 
-		s_vpr_e(inst->sid, "%4d|%4d|%7u(%5ux%2u)|%7u(%5ux%2u)|%7u(%5ux%2u)|%7u(%5ux%2u)|%llu\n",
-		        max(iplane->width, oplane->width), max(iplane->height, oplane->height),
-		        sz_i * cnt_i, sz_i_e * cnt_i, sz_o * cnt_o, sz_o_e * cnt_o,
-		        dpb_size * dpb_cnt, total);
+		s_vpr_e(inst->sid,
+			"%4d|%4d|%11u(%8ux%2u)|%11u(%8ux%2u)|%11u(%8ux%2u)|%11u(%8ux%2u)|%11u(%8ux%2u)|%10u|%10u|%10u|%10u|%10u|%10u|%10llu\n",
+			max(iplane->width, oplane->width),
+			max(iplane->height, oplane->height),
+			sz_i * cnt_i, sz_i, cnt_i,
+			sz_i_e * cnt_i, sz_i_e, cnt_i,
+			sz_o * cnt_o, sz_o, cnt_o,
+			sz_o_e * cnt_o, sz_o_e, cnt_o,
+			dpb_size * dpb_cnt, dpb_size, dpb_cnt,
+			sz_s * cnt_s, sz_s1 * cnt_s1,
+			sz_s2 * cnt_s2, sz_p * cnt_p, sz_p1 * cnt_p1,
+			sz_r * cnt_r, total);
 	}
 error:
 	mutex_unlock(&core->lock);
@@ -3547,7 +3546,8 @@ static int msm_vidc_load_resources(int flipped_state,
 			"H/W is overloaded. needed: %d max: %d\n",
 			video_load, max_video_load);
 		msm_vidc_print_running_insts(inst->core);
-		return -EBUSY;
+		inst->supported = false;
+		return -ENOMEM;
 	}
 
 	if (video_load + image_load > max_video_load + max_image_load) {
@@ -3555,7 +3555,8 @@ static int msm_vidc_load_resources(int flipped_state,
 			"H/W is overloaded. needed: [video + image][%d + %d], max: [video + image][%d + %d]\n",
 			video_load, image_load, max_video_load, max_image_load);
 		msm_vidc_print_running_insts(inst->core);
-		return -EBUSY;
+		inst->supported = false;
+		return -ENOMEM;
 	}
 
 	hdev = core->device;
@@ -4745,17 +4746,29 @@ int msm_comm_qbuf(struct msm_vidc_inst *inst, struct msm_vidc_buffer *mbuf)
 		return -EINVAL;
 	}
 
+	mutex_lock(&inst->registeredbufs.lock);
 	if (inst->state != MSM_VIDC_START_DONE) {
 		mbuf->flags |= MSM_VIDC_FLAG_DEFERRED;
+		mutex_unlock(&inst->registeredbufs.lock);
 		print_vidc_buffer(VIDC_HIGH, "qbuf deferred", inst, mbuf);
 		return 0;
 	}
+
+	mbuf->flags &= ~MSM_VIDC_FLAG_DEFERRED;
+	if (mbuf->flags & MSM_VIDC_FLAG_QUEUED) {
+		mutex_unlock(&inst->registeredbufs.lock);
+		print_vidc_buffer(VIDC_HIGH, "qbuf queued", inst, mbuf);
+		return 0;
+	}
+	mbuf->flags |= MSM_VIDC_FLAG_QUEUED;
+	mutex_unlock(&inst->registeredbufs.lock);
 
 	do_bw_calc = mbuf->vvb.vb2_buf.type == INPUT_MPLANE;
 	rc = msm_comm_scale_clocks_and_bus(inst, do_bw_calc);
 	if (rc)
 		s_vpr_e(inst->sid, "%s: scale clock & bw failed\n", __func__);
 
+	mutex_lock(&inst->registeredbufs.lock);
 	print_vidc_buffer(VIDC_HIGH|VIDC_PERF, "qbuf", inst, mbuf);
 	ctrl = get_ctrl(inst, V4L2_CID_MPEG_VIDC_SUPERFRAME);
 	if (ctrl->val)
@@ -4765,6 +4778,7 @@ int msm_comm_qbuf(struct msm_vidc_inst *inst, struct msm_vidc_buffer *mbuf)
 	if (rc)
 		s_vpr_e(inst->sid, "%s: Failed qbuf to hfi: %d\n",
 			__func__, rc);
+	mutex_unlock(&inst->registeredbufs.lock);
 
 	return rc;
 }
@@ -5915,7 +5929,7 @@ int msm_comm_check_memory_supported(struct msm_vidc_inst *vidc_inst)
 			"%s: video mem overshoot - reached %llu MB, max_limit %llu MB\n",
 			__func__, total_mem_size >> 20, memory_limit_mbytes);
 		msm_comm_print_insts_info(core);
-		return -EBUSY;
+		return -ENOMEM;
 	}
 
 	if (!is_secure_session(vidc_inst)) {
@@ -5930,7 +5944,7 @@ int msm_comm_check_memory_supported(struct msm_vidc_inst *vidc_inst)
 				"%s: insufficient device addr space, required %llu, available %llu\n",
 				__func__, non_sec_mem_size, non_sec_cb_size);
 			msm_comm_print_insts_info(core);
-			return -EINVAL;
+			return -ENOMEM;
 		}
 	}
 
@@ -5962,6 +5976,7 @@ static int msm_vidc_check_mbps_supported(struct msm_vidc_inst *inst)
 				"H/W is overloaded. needed: %d max: %d\n",
 				video_load, max_video_load);
 			msm_vidc_print_running_insts(inst->core);
+			inst->supported = false;
 			return -EBUSY;
 		}
 
@@ -5971,6 +5986,7 @@ static int msm_vidc_check_mbps_supported(struct msm_vidc_inst *inst)
 				video_load, image_load,
 				max_video_load, max_image_load);
 			msm_vidc_print_running_insts(inst->core);
+			inst->supported = false;
 			return -EBUSY;
 		}
 	}
@@ -6560,16 +6576,18 @@ void print_vidc_buffer(u32 tag, const char *str, struct msm_vidc_inst *inst,
 			mbuf->vvb.flags, mbuf->vvb.vb2_buf.timestamp,
 			mbuf->smem[0].refcount, mbuf->flags);
 	else
-		dprintk(tag, inst->sid, "%s: %s: idx %2d fd %d off %d d %x sz %d fill %d fl %x ts %lld ref %d mf %x, ex: fd %d d %x sz %d f %d r %d\n",
-       			str, vb2->type == INPUT_MPLANE ? "OUT" : "CAP",
-        		vb2->index, vb2->planes[0].m.fd, vb2->planes[0].data_offset,
-        		mbuf->smem[0].device_addr, vb2->planes[0].length,
-        		vb2->planes[0].bytesused, mbuf->vvb.flags,
-        		mbuf->vvb.vb2_buf.timestamp, mbuf->smem[0].refcount,
-        		mbuf->flags, vb2->planes[1].m.fd,
-        		mbuf->smem[1].device_addr, vb2->planes[1].length,
-        		vb2->planes[1].bytesused, mbuf->smem[1].refcount);
-
+		dprintk(tag, inst->sid,
+			"%s: %s: idx %2d fd %d off %d daddr %x size %d filled %d flags 0x%x ts %lld refcnt %d mflags 0x%x, extradata: fd %d off %d daddr %x size %d filled %d refcnt %d\n",
+			str, vb2->type == INPUT_MPLANE ?
+			"OUTPUT" : "CAPTURE",
+			vb2->index, vb2->planes[0].m.fd,
+			vb2->planes[0].data_offset, mbuf->smem[0].device_addr,
+			vb2->planes[0].length, vb2->planes[0].bytesused,
+			mbuf->vvb.flags, mbuf->vvb.vb2_buf.timestamp,
+			mbuf->smem[0].refcount, mbuf->flags,
+			vb2->planes[1].m.fd, vb2->planes[1].data_offset,
+			mbuf->smem[1].device_addr, vb2->planes[1].length,
+			vb2->planes[1].bytesused, mbuf->smem[1].refcount);
 }
 
 void print_vb2_buffer(const char *str, struct msm_vidc_inst *inst,
@@ -6952,7 +6970,7 @@ struct msm_vidc_buffer *msm_comm_get_vidc_buffer(struct msm_vidc_inst *inst,
 
 	if (!found) {
 		/* this is new vb2_buffer */
-		mbuf = kmem_cache_zalloc(kmem_buf_pool, GFP_KERNEL);
+		mbuf = kzalloc(sizeof(struct msm_vidc_buffer), GFP_KERNEL);
 		if (!mbuf) {
 			s_vpr_e(inst->sid, "%s: alloc msm_vidc_buffer failed\n",
 				__func__);
@@ -7243,7 +7261,7 @@ static void kref_free_mbuf(struct kref *kref)
 	struct msm_vidc_buffer *mbuf = container_of(kref,
 			struct msm_vidc_buffer, kref);
 
-	kmem_cache_free(kmem_buf_pool, mbuf);
+	kfree(mbuf);
 }
 
 void kref_put_mbuf(struct msm_vidc_buffer *mbuf)

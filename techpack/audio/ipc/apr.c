@@ -29,7 +29,6 @@
 #include <dsp/audio_notifier.h>
 #include <ipc/apr.h>
 #include <ipc/apr_tal.h>
-#include <linux/mmhardware_sysfs.h>
 
 #define APR_PKT_IPC_LOG_PAGE_CNT 2
 
@@ -309,16 +308,15 @@ static void apr_adsp_up(void)
 	pr_info("%s: Q6 is Up\n", __func__);
 	apr_set_q6_state(APR_SUBSYS_LOADED);
 
-	/* register adsp hardware */
-#ifdef CONFIG_MMHARDWARE_DETECTION
-	register_kobj_under_mmsysfs(MM_HW_ADSP, MM_HARDWARE_SYSFS_ADSP_FOLDER);
-#endif
-
 	spin_lock(&apr_priv->apr_lock);
 	if (apr_priv->is_initial_boot)
 		schedule_work(&apr_priv->add_chld_dev_work);
 	spin_unlock(&apr_priv->apr_lock);
 	snd_event_notify(apr_priv->dev, SND_EVENT_UP);
+
+#ifdef OPLUS_FEATURE_ADSP_RECOVERY
+	oplus_set_ssr_state(false);
+#endif
 }
 
 int apr_load_adsp_image(void)

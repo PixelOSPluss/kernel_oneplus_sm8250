@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2016-2019, 2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2019, The Linux Foundation. All rights reserved.
  */
 
 #include <drm/msm_drm_pp.h>
@@ -688,10 +688,7 @@ void sde_setup_dspp_pcc_v1_7(struct sde_hw_dspp *ctx, void *cfg)
 		return;
 	}
 	DRM_DEBUG_DRIVER("Enable PCC feature\n");
-	if (hw_cfg->payload_clear)
-		pcc = hw_cfg->payload_clear;
-	else
-		pcc = hw_cfg->payload;
+	pcc = hw_cfg->payload;
 
 	SDE_REG_WRITE(&ctx->hw, ctx->cap->sblk->pcc.base + PCC_CONST_COEFF_OFF,
 				  pcc->r.c & PCC_CONST_COEFF_MASK);
@@ -954,17 +951,17 @@ void sde_read_dspp_hist_v1_7(struct sde_hw_dspp *ctx, void *cfg)
 
 void sde_lock_dspp_hist_v1_7(struct sde_hw_dspp *ctx, void *cfg)
 {
-	u32 offset_ctl, val;
+	u32 offset_ctl;
 
-	if (!ctx || !cfg) {
-		DRM_ERROR("invalid parameters ctx %pK cfg %pK", ctx, cfg);
+	if (!ctx) {
+		DRM_ERROR("invalid parameters ctx %pK", ctx);
 		return;
 	}
 
 	offset_ctl = ctx->cap->sblk->hist.base + PA_HIST_CTRL_DSPP_OFF;
 
-	val = (*(u32 *)cfg) & 0x1;
-	SDE_REG_WRITE(&ctx->hw, offset_ctl, val);
+	/* lock hist buffer */
+	SDE_REG_WRITE(&ctx->hw, offset_ctl, 1);
 }
 
 void sde_setup_dspp_dither_v1_7(struct sde_hw_dspp *ctx, void *cfg)
