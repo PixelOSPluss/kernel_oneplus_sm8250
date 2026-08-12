@@ -5072,7 +5072,7 @@ static int tfa98xx_ext_reset(struct tfa98xx *tfa98xx)
 	return 0;
 }
 
-static int tfa98xx_parse_dt(struct device *dev, struct tfa98xx *tfa98xx,
+static int __maybe_unused tfa98xx_parse_dt(struct device *dev, struct tfa98xx *tfa98xx,
 			    struct device_node *np)
 {
 	tfa98xx->reset_gpio = of_get_named_gpio(np, "reset-gpio", 0);
