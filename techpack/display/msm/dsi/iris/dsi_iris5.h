@@ -9,6 +9,7 @@
 #define _DSI_IRIS_H_
 
 #include "dsi_iris5_def.h"
+#include "dsi_iris5_ioctl.h"
 
 void iris_set_cfg_index(int index);
 int iris_parse_param(struct dsi_display *display);

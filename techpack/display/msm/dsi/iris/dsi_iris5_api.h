@@ -9,6 +9,7 @@
 #define _DSI_IRIS_API_H_
 
 #include "dsi_display.h"
+#include "dsi_iris5_ioctl.h"
 
 void iris_deinit(struct dsi_display *display);
 void iris_power_on(struct dsi_panel *panel);

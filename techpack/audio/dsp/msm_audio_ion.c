@@ -145,7 +145,7 @@ static int msm_audio_dma_buf_unmap(struct dma_buf *dma_buf)
 	int rc = 0;
 	struct msm_audio_alloc_data *alloc_data = NULL;
 	struct list_head *ptr, *next;
-	struct device *cb_dev = msm_audio_ion_data.cb_dev;
+	struct device *cb_dev __maybe_unused = msm_audio_ion_data.cb_dev;
 	bool found = false;
 
 	/*
@@ -273,7 +273,7 @@ static int msm_audio_ion_unmap_kernel(struct dma_buf *dma_buf)
 	int rc = 0;
 	void *vaddr = NULL;
 	struct msm_audio_alloc_data *alloc_data = NULL;
-	struct device *cb_dev = msm_audio_ion_data.cb_dev;
+	struct device *cb_dev __maybe_unused = msm_audio_ion_data.cb_dev;
 
 	/*
 	 * TBD: remove the below section once new API
@@ -564,7 +564,7 @@ int msm_audio_ion_mmap(struct audio_buffer *abuff,
 	struct page *page;
 	int ret = 0;
 	bool found = false;
-	struct device *cb_dev = msm_audio_ion_data.cb_dev;
+	struct device *cb_dev __maybe_unused = msm_audio_ion_data.cb_dev;
 
 	mutex_lock(&(msm_audio_ion_data.list_mutex));
 	list_for_each_entry(alloc_data, &(msm_audio_ion_data.alloc_list),

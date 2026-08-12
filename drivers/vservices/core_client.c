@@ -58,7 +58,7 @@ struct pending_reset {
 
 static int vs_client_core_fatal_error(struct vs_client_core_state *state)
 {
-	struct core_client *client = to_core_client(state);
+	struct core_client *client __maybe_unused = to_core_client(state);
 
 	/* Force a transport level reset */
 	dev_err(&client->service->dev," Fatal error - resetting session\n");
