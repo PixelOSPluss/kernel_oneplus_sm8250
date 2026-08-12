@@ -8785,7 +8785,7 @@ select_task_rq_fair(struct task_struct *p, int prev_cpu, int wake_flags)
 		record_wakee(p);
 
                 if (sched_energy_enabled()) {
-			new_cpu = find_energy_efficient_cpu(p, prev_cpu, sync, 1);
+			new_cpu = find_energy_efficient_cpu(p, prev_cpu, sync, 1, 0);
 			if (new_cpu >= 0)
 				return new_cpu;
 			new_cpu = prev_cpu;
