@@ -28,6 +28,7 @@
 #endif /*CONFIG_DEBUG_FS*/
 #include <linux/version.h>
 #include <linux/input.h>
+#include <linux/proc_fs.h>
 #include "config.h"
 #include "tfa98xx.h"
 #include "tfa.h"

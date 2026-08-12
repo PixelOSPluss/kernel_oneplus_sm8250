@@ -65,10 +65,12 @@ int qpnp_pon_wd_config(bool enable);
 int qpnp_pon_set_restart_reason(enum pon_restart_reason reason);
 bool qpnp_pon_check_hard_reset_stored(void);
 int qpnp_pon_modem_pwr_off(enum pon_power_off_type type);
+int qpnp_pon_is_ps_hold_reset(void);
+int qpnp_pon_is_lpk(void);
 
 #else
 
-static int qpnp_pon_system_pwr_off(enum pon_power_off_type type)
+static inline int qpnp_pon_system_pwr_off(enum pon_power_off_type type)
 {
 	return -ENODEV;
 }
@@ -84,7 +86,7 @@ static inline int qpnp_pon_trigger_config(enum pon_trigger_source pon_src,
 	return -ENODEV;
 }
 
-int qpnp_pon_wd_config(bool enable)
+static inline int qpnp_pon_wd_config(bool enable)
 {
 	return -ENODEV;
 }
@@ -102,6 +104,16 @@ static inline bool qpnp_pon_check_hard_reset_stored(void)
 static inline int qpnp_pon_modem_pwr_off(enum pon_power_off_type type)
 {
 	return -ENODEV;
+}
+
+static inline int qpnp_pon_is_ps_hold_reset(void)
+{
+	return 0;
+}
+
+static inline int qpnp_pon_is_lpk(void)
+{
+	return 0;
 }
 
 #endif

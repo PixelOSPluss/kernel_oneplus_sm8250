@@ -21,6 +21,13 @@
 #include <net/sock.h>
 #include <linux/skbuff.h>
 
+#ifndef cpu_isolated
+#define cpu_isolated(cpu) (0)
+#endif
+#ifndef __cpu_isolated_mask
+#define __cpu_isolated_mask cpu_online_mask
+#endif
+
 MODULE_LICENSE("GPL v2");
 /* Local Macros */
 #define RMNET_SHS_RX_BPNSEC_TO_BPSEC(x) ((x)*1000000000)
