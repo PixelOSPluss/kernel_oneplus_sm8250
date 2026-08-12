@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2015-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/delay.h>
@@ -14,6 +13,9 @@
 #include "dsi_panel.h"
 #include "dsi_catalog.h"
 #include "sde_dbg.h"
+#if defined(OPLUS_FEATURE_PXLW_IRIS5)
+#include "iris/dsi_iris5_api.h"
+#endif
 
 #define MMSS_MISC_CLAMP_REG_OFF           0x0014
 #define DSI_CTRL_DYNAMIC_FORCE_ON         (0x23F|BIT(8)|BIT(9)|BIT(11)|BIT(21))
@@ -69,20 +71,13 @@ static void dsi_split_link_setup(struct dsi_ctrl_hw *ctrl,
 static void dsi_setup_trigger_controls(struct dsi_ctrl_hw *ctrl,
 				       struct dsi_host_common_cfg *cfg)
 {
-	u32 reg;
+	u32 reg = 0;
 	const u8 trigger_map[DSI_TRIGGER_MAX] = {
 		0x0, 0x2, 0x1, 0x4, 0x5, 0x6 };
 
-	reg = DSI_R32(ctrl, DSI_TRIG_CTRL);
-
-	if (cfg->te_mode == DSI_TE_ON_EXT_PIN)
-		reg |= BIT(31);
-	else
-		reg &= ~BIT(31);
-
-	reg &= ~(0x7 << 4);
+	reg |= (cfg->te_mode == DSI_TE_ON_EXT_PIN) ? BIT(31) : 0;
+	reg |= (trigger_map[cfg->dma_cmd_trigger] & 0x7);
 	reg |= (trigger_map[cfg->mdp_cmd_trigger] & 0x7) << 4;
-
 	DSI_W32(ctrl, DSI_TRIG_CTRL, reg);
 }
 
@@ -684,6 +679,11 @@ void dsi_ctrl_hw_cmn_kickoff_command(struct dsi_ctrl_hw *ctrl,
 	reg |= BIT(20);/* Disable write watermark*/
 	reg |= BIT(16);/* Disable read watermark */
 
+#if defined(OPLUS_FEATURE_PXLW_IRIS5)
+	/* set DMA FIFO read watermark to 15/16 full */
+	if (iris_is_chip_supported())
+		reg = 0x33;
+#endif
 	DSI_W32(ctrl, DSI_DMA_FIFO_CTRL, reg);
 	DSI_W32(ctrl, DSI_DMA_CMD_OFFSET, cmd->offset);
 	DSI_W32(ctrl, DSI_DMA_CMD_LENGTH, (cmd->length & 0xFFFFFF));
@@ -876,33 +876,6 @@ u32 dsi_ctrl_hw_cmn_get_cmd_read_data(struct dsi_ctrl_hw *ctrl,
 	*hw_read_cnt = read_cnt;
 	DSI_CTRL_HW_DBG(ctrl, "Read %d bytes\n", rx_byte);
 	return rx_byte;
-}
-
-/**
- * poll_slave_dma_status() - API to clear poll DMA status
- * @ctrl:          Pointer to the controller host hardware.
- *
- * Return: DMA status.
- */
-u32 dsi_ctrl_hw_cmn_poll_slave_dma_status(struct dsi_ctrl_hw *ctrl)
-{
-	int rc = 0;
-	u32 status;
-	u32 const delay_us = 10;
-	u32 const timeout_us = 5000;
-
-	rc = readl_poll_timeout_atomic(ctrl->base + DSI_INT_CTRL,
-				      status,
-				      ((status & DSI_CMD_MODE_DMA_DONE)
-					> 0),
-				      delay_us,
-				      timeout_us);
-	if (rc) {
-		DSI_CTRL_HW_DBG(ctrl, "DSI1 CMD_MODE_DMA_DONE failed\n");
-		status = 0;
-	}
-
-	return status;
 }
 
 /**
@@ -1653,34 +1626,4 @@ int dsi_ctrl_hw_cmn_wait4dynamic_refresh_done(struct dsi_ctrl_hw *ctrl)
 	DSI_W32(ctrl, DSI_INT_CTRL, reg);
 
 	return 0;
-}
-
-bool dsi_ctrl_hw_cmn_vid_engine_busy(struct dsi_ctrl_hw *ctrl)
-{
-	u32 reg = 0, video_engine_busy = BIT(3);
-	int rc;
-	u32 const sleep_us = 1000;
-	u32 const timeout_us = 50000;
-
-	rc = readl_poll_timeout(ctrl->base + DSI_STATUS, reg,
-			!(reg & video_engine_busy), sleep_us, timeout_us);
-	if (rc)
-		return true;
-
-	return false;
-}
-
-void dsi_ctrl_hw_cmn_init_cmddma_trig_ctrl(struct dsi_ctrl_hw *ctrl,
-					   struct dsi_host_common_cfg *cfg)
-{
-	u32 reg;
-	const u8 trigger_map[DSI_TRIGGER_MAX] = {
-		0x0, 0x2, 0x1, 0x4, 0x5, 0x6 };
-
-	/* Initialize the default trigger used for Command Mode DMA path. */
-	reg = DSI_R32(ctrl, DSI_TRIG_CTRL);
-	reg &= ~BIT(16); /* Reset DMA_TRG_MUX */
-	reg &= ~(0xF); /* Reset DMA_TRIGGER_SEL */
-	reg |= (trigger_map[cfg->dma_cmd_trigger] & 0xF);
-	DSI_W32(ctrl, DSI_TRIG_CTRL, reg);
 }

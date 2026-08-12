@@ -19,7 +19,10 @@
 #include "sde_core_irq.h"
 #include "dsi_panel.h"
 #include "sde_hw_color_proc_common_v4.h"
-#include "sde_connector.h"
+#ifdef OPLUS_BUG_STABILITY
+#include "oplus_display_private_api.h"
+#include "oplus_onscreenfingerprint.h"
+#endif
 
 struct sde_cp_node {
 	u32 property_id;
@@ -44,16 +47,6 @@ struct sde_cp_prop_attach {
 	u32 feature;
 	uint64_t val;
 };
-
-struct pcc_check_info {
-	uint32_t crtc_id;
-	bool initialized;
-	struct drm_property pcc_property;
-	uint64_t pcc_val;
-	uint64_t fod_val;
-};
-
-static struct pcc_check_info pcc_info;
 
 #define ALIGNED_OFFSET (U32_MAX & ~(LTM_GUARD_BYTES))
 
@@ -246,57 +239,16 @@ static int set_dspp_vlut_feature(struct sde_hw_dspp *hw_dspp,
 	return ret;
 }
 
-extern struct drm_msm_pcc color_transform_pcc_cfg;
-static struct drm_msm_pcc pcc_cfg_clear;
-
-void sde_dspp_clear_pcc(struct sde_hw_cp_cfg *hw_cfg)
-{
-	if (!hw_cfg->payload) {
-		DRM_INFO("hw_cfg->payload in NULL\n");
-		return;
-	}
-
-	hw_cfg->payload_clear = &pcc_cfg_clear;
-
-	pcc_cfg_clear.r.c = color_transform_pcc_cfg.r.c;
-	pcc_cfg_clear.r.r = color_transform_pcc_cfg.r.r;
-	pcc_cfg_clear.r.g = color_transform_pcc_cfg.r.g;
-	pcc_cfg_clear.r.b = color_transform_pcc_cfg.r.b;
-	pcc_cfg_clear.g.c = color_transform_pcc_cfg.g.c;
-	pcc_cfg_clear.g.r = color_transform_pcc_cfg.g.r;
-	pcc_cfg_clear.g.g = color_transform_pcc_cfg.g.g;
-	pcc_cfg_clear.g.b = color_transform_pcc_cfg.g.b;
-	pcc_cfg_clear.b.c = color_transform_pcc_cfg.b.c;
-	pcc_cfg_clear.b.r = color_transform_pcc_cfg.b.r;
-	pcc_cfg_clear.b.g = color_transform_pcc_cfg.b.g;
-	pcc_cfg_clear.b.b = color_transform_pcc_cfg.b.b;
-}
-
 static int set_dspp_pcc_feature(struct sde_hw_dspp *hw_dspp,
 				struct sde_hw_cp_cfg *hw_cfg,
 				struct sde_crtc *hw_crtc)
 {
 	int ret = 0;
-	struct drm_msm_pcc *pcc_cfg;
-	//DRM_INFO("layer_flag %d %d\n", hw_crtc->mi_dimlayer_type, hw_cfg->mi_dimlayer_type);
 
 	if (!hw_dspp || !hw_dspp->ops.setup_pcc)
 		ret = -EINVAL;
-	else {
-
-		if (hw_cfg->payload)
-			pcc_cfg = hw_cfg->payload;
-
-		if (hw_crtc->mi_dimlayer_type & MI_DIMLAYER_FOD_HBM_OVERLAY)
-			sde_dspp_clear_pcc(hw_cfg);
-		else
-			hw_cfg->payload_clear = NULL;
-
-		if (hw_cfg->payload_clear)
-			pcc_cfg = hw_cfg->payload_clear;
-
+	else
 		hw_dspp->ops.setup_pcc(hw_dspp, hw_cfg);
-	}
 	return ret;
 }
 
@@ -1118,6 +1070,12 @@ static int sde_cp_enable_crtc_property(struct drm_crtc *crtc,
 	return ret;
 }
 
+#ifdef OPLUS_BUG_STABILITY
+struct sde_kms *get_kms_(struct drm_crtc *crtc)
+{
+	return get_kms(crtc);
+}
+#endif
 
 static void sde_cp_crtc_prop_attach(struct sde_cp_prop_attach *prop_attach)
 {
@@ -1366,7 +1324,7 @@ static void _sde_cp_crtc_enable_hist_irq(struct sde_crtc *sde_crtc)
 	struct sde_hw_dspp *hw_dspp = NULL;
 	struct sde_crtc_irq_info *node = NULL;
 	int i, irq_idx, ret = 0;
-	unsigned long flags, state_flags;
+	unsigned long flags;
 
 	if (!crtc_drm) {
 		DRM_ERROR("invalid crtc %pK\n", crtc_drm);
@@ -1396,13 +1354,12 @@ static void _sde_cp_crtc_enable_hist_irq(struct sde_crtc *sde_crtc)
 
 	spin_lock_irqsave(&sde_crtc->spin_lock, flags);
 	node = _sde_cp_get_intr_node(DRM_EVENT_HISTOGRAM, sde_crtc);
+	spin_unlock_irqrestore(&sde_crtc->spin_lock, flags);
 
-	if (!node) {
-		spin_unlock_irqrestore(&sde_crtc->spin_lock, flags);
+	if (!node)
 		return;
-	}
 
-	spin_lock_irqsave(&node->state_lock, state_flags);
+	spin_lock_irqsave(&node->state_lock, flags);
 	if (node->state == IRQ_DISABLED) {
 		ret = sde_core_irq_enable(kms, &irq_idx, 1);
 		if (ret)
@@ -1410,10 +1367,14 @@ static void _sde_cp_crtc_enable_hist_irq(struct sde_crtc *sde_crtc)
 		else
 			node->state = IRQ_ENABLED;
 	}
-	spin_unlock_irqrestore(&node->state_lock, state_flags);
-	spin_unlock_irqrestore(&sde_crtc->spin_lock, flags);
+	spin_unlock_irqrestore(&node->state_lock, flags);
 }
 
+#ifdef OPLUS_BUG_STABILITY
+extern struct drm_msm_pcc oplus_save_pcc;
+extern bool oplus_pcc_enabled;
+extern bool oplus_skip_pcc;
+#endif
 static int sde_cp_crtc_checkfeature(struct sde_cp_node *prop_node,
 	struct sde_crtc *sde_crtc, struct sde_crtc_state *sde_crtc_state)
 {
@@ -1491,6 +1452,27 @@ static void sde_cp_crtc_setfeature(struct sde_cp_node *prop_node,
 
 	memset(&hw_cfg, 0, sizeof(hw_cfg));
 	sde_cp_get_hw_payload(prop_node, &hw_cfg, &feature_enabled);
+
+#ifdef OPLUS_BUG_STABILITY
+	if (prop_node->feature == SDE_CP_CRTC_DSPP_PCC &&
+	    is_dsi_panel(&sde_crtc->base)) {
+		if (hw_cfg.payload && (hw_cfg.len == sizeof(oplus_save_pcc))) {
+			memcpy(&oplus_save_pcc, hw_cfg.payload, hw_cfg.len);
+			oplus_pcc_enabled = true;
+
+			if (is_skip_pcc(&sde_crtc->base)) {
+				hw_cfg.payload = NULL;
+				hw_cfg.len = 0;
+				oplus_skip_pcc = true;
+			} else {
+				oplus_skip_pcc = false;
+			}
+		} else {
+			oplus_pcc_enabled = false;
+		}
+	}
+#endif
+
 	hw_cfg.num_of_mixers = sde_crtc->num_mixers;
 	hw_cfg.last_feature = 0;
 
@@ -1521,7 +1503,6 @@ static void sde_cp_crtc_setfeature(struct sde_cp_node *prop_node,
 			hw_cfg.mixer_info = hw_lm;
 			hw_cfg.displayh = num_mixers * hw_lm->cfg.out_width;
 			hw_cfg.displayv = hw_lm->cfg.out_height;
-			hw_cfg.mi_dimlayer_type = sde_crtc->mi_dimlayer_type;
 
 			ret = set_feature(hw_dspp, &hw_cfg, sde_crtc);
 			if (ret)
@@ -1807,6 +1788,9 @@ void sde_cp_crtc_apply_properties(struct drm_crtc *crtc)
 	struct sde_cp_node *prop_node = NULL, *n = NULL;
 	struct sde_hw_ctl *ctl;
 	u32 num_mixers = 0, i = 0;
+#ifdef OPLUS_BUG_STABILITY
+	bool dirty_pcc = false;
+#endif /* OPLUS_BUG_STABILITY */
 	int rc = 0;
 	bool need_flush = false;
 
@@ -1829,6 +1813,18 @@ void sde_cp_crtc_apply_properties(struct drm_crtc *crtc)
 	}
 
 	mutex_lock(&sde_crtc->crtc_cp_lock);
+
+#ifdef OPLUS_BUG_STABILITY
+	dirty_pcc = sde_cp_crtc_update_pcc(crtc);
+	if (dirty_pcc) {
+		set_dspp_flush = true;
+	}
+#endif /* OPLUS_BUG_STABILITY */
+
+	/* Check if dirty lists are empty and ad features are disabled for
+	 * early return. If ad properties are active then we need to issue
+	 * dspp flush.
+	 **/
 
 	if (list_empty(&sde_crtc->dirty_list) &&
 			list_empty(&sde_crtc->ad_dirty) &&
@@ -1986,13 +1982,6 @@ int sde_cp_crtc_set_property(struct drm_crtc *crtc,
 	struct sde_crtc *sde_crtc = NULL;
 	int ret = 0, i = 0, dspp_cnt, lm_cnt;
 	u8 found = 0;
-	bool fod_changed = false;
-
-	if (!pcc_info.initialized) {
-		pcc_info.crtc_id = crtc->base.id;
-		DRM_INFO("save primary crtc_id = %d\n", crtc->base.id);
-		pcc_info.initialized = true;
-	}
 
 	if (!crtc || !property) {
 		DRM_ERROR("invalid crtc %pK property %pK\n", crtc, property);
@@ -2005,44 +1994,11 @@ int sde_cp_crtc_set_property(struct drm_crtc *crtc,
 		return -EINVAL;
 	}
 
-	if (!strncmp(property->name, "mi_fod_sync_info", sizeof("mi_fod_sync_info")) ||
-		!strncmp(property->name, "SDE_DSPP_PCC_V4", sizeof("SDE_DSPP_PCC_V4"))) {
-		pr_debug("prop_name=%s prop_id=%d prop_val=%llu, crtc_name=%s crtc_id=%d\n",
-			property->name, property->base.id, val, sde_crtc->name, crtc->base.id);
-	}
-
-	if (!strncmp(property->name, "mi_fod_sync_info", sizeof("mi_fod_sync_info"))
-		&& pcc_info.crtc_id == crtc->base.id) {
-		if ((val & MI_DIMLAYER_FOD_HBM_OVERLAY) != (pcc_info.fod_val & MI_DIMLAYER_FOD_HBM_OVERLAY)) {
-			fod_changed = true;
-			DRM_INFO("mi_fod_sync_info changed, prop_id = %d, hbm_overlay = %d\n",
-					property->base.id, val & MI_DIMLAYER_FOD_HBM_OVERLAY);
-		}
-		pcc_info.fod_val = val;
-	}
-
 	mutex_lock(&sde_crtc->crtc_cp_lock);
-
-	if (!strncmp(property->name, "SDE_DSPP_PCC_V4", sizeof("SDE_DSPP_PCC_V4"))
-		&& pcc_info.crtc_id == crtc->base.id) {
-		pcc_info.pcc_val = val;
-		pcc_info.pcc_property.flags = property->flags;
-		pcc_info.pcc_property.base.id = property->base.id;
-	}
-
-	if (fod_changed) {
-		list_for_each_entry(prop_node, &sde_crtc->feature_list, feature_list) {
-			if (pcc_info.pcc_property.base.id == prop_node->property_id) {
-				found = 1;
-				break;
-			}
-		}
-	} else {
-		list_for_each_entry(prop_node, &sde_crtc->feature_list, feature_list) {
-			if (property->base.id == prop_node->property_id) {
-				found = 1;
-				break;
-			}
+	list_for_each_entry(prop_node, &sde_crtc->feature_list, feature_list) {
+		if (property->base.id == prop_node->property_id) {
+			found = 1;
+			break;
 		}
 	}
 
@@ -2094,19 +2050,11 @@ int sde_cp_crtc_set_property(struct drm_crtc *crtc,
 	/* remove the property from dirty list */
 	list_del_init(&prop_node->dirty_list);
 
-	if (!val) {
+	if (!val)
 		ret = sde_cp_disable_crtc_property(crtc, property, prop_node);
-	} else {
-		if (fod_changed) {
-			DRM_INFO("pcc_property enable\n");
-			ret = sde_cp_enable_crtc_property(crtc, &pcc_info.pcc_property,
-							  prop_node, pcc_info.pcc_val);
-
-		} else {
-			ret = sde_cp_enable_crtc_property(crtc, property,
+	else
+		ret = sde_cp_enable_crtc_property(crtc, property,
 						  prop_node, val);
-		}
-	}
 
 	if (!ret) {
 		/* remove the property from active list */
@@ -2114,10 +2062,6 @@ int sde_cp_crtc_set_property(struct drm_crtc *crtc,
 		/* Mark the feature as dirty */
 		sde_cp_update_list(prop_node, sde_crtc, true);
 	}
-
-	if (fod_changed)
-		ret = -ENOENT;
-
 exit:
 	mutex_unlock(&sde_crtc->crtc_cp_lock);
 	return ret;
@@ -2198,7 +2142,6 @@ void sde_cp_crtc_destroy_properties(struct drm_crtc *crtc)
 	}
 	sde_crtc->ltm_buffer_cnt = 0;
 	sde_crtc->ltm_hist_en = false;
-	sde_crtc->hist_irq_idx = -1;
 
 	mutex_destroy(&sde_crtc->crtc_cp_lock);
 	INIT_LIST_HEAD(&sde_crtc->active_list);
@@ -2294,7 +2237,6 @@ void sde_cp_crtc_clear(struct drm_crtc *crtc)
 	}
 	sde_crtc->ltm_buffer_cnt = 0;
 	sde_crtc->ltm_hist_en = false;
-	sde_crtc->hist_irq_idx = -1;
 	INIT_LIST_HEAD(&sde_crtc->ltm_buf_free);
 	INIT_LIST_HEAD(&sde_crtc->ltm_buf_busy);
 }
@@ -2501,20 +2443,9 @@ static void dspp_ltm_install_property(struct drm_crtc *crtc)
 	char feature_name[256];
 	struct sde_kms *kms = NULL;
 	struct sde_mdss_cfg *catalog = NULL;
-	u32 version = 0, ltm_sw_fuse = 0;
+	u32 version;
 
 	kms = get_kms(crtc);
-	if (!kms || !kms->hw_sw_fuse) {
-		DRM_ERROR("!kms = %d\n", !kms);
-		return;
-	}
-
-	ltm_sw_fuse = sde_hw_get_ltm_sw_fuse_value(kms->hw_sw_fuse);
-	DRM_DEBUG_DRIVER("ltm_sw_fuse value: 0x%x\n", ltm_sw_fuse);
-	if (ltm_sw_fuse != SW_FUSE_ENABLE) {
-		pr_info("ltm_sw_fuse is not enabled: 0x%x\n", ltm_sw_fuse);
-	}
-
 	catalog = kms->catalog;
 	version = catalog->dspp[0].sblk->ltm.version >> 16;
 	snprintf(feature_name, ARRAY_SIZE(feature_name), "%s%d",
@@ -3085,20 +3016,45 @@ static void sde_cp_hist_interrupt_cb(void *arg, int irq_idx)
 	struct sde_crtc *crtc = arg;
 	struct drm_crtc *crtc_drm = &crtc->base;
 	struct sde_hw_dspp *hw_dspp;
-	u32 lock_hist = 1;
+	struct sde_kms *kms;
+	struct sde_crtc_irq_info *node = NULL;
 	u32 i;
+	int ret = 0;
+	unsigned long flags;
+
+	/* disable histogram irq */
+	kms = get_kms(crtc_drm);
+	spin_lock_irqsave(&crtc->spin_lock, flags);
+	node = _sde_cp_get_intr_node(DRM_EVENT_HISTOGRAM, crtc);
+	spin_unlock_irqrestore(&crtc->spin_lock, flags);
+
+	if (!node) {
+		DRM_DEBUG_DRIVER("cannot find histogram event node in crtc\n");
+		return;
+	}
+
+	spin_lock_irqsave(&node->state_lock, flags);
+	if (node->state == IRQ_ENABLED) {
+		if (sde_core_irq_disable_nolock(kms, irq_idx)) {
+			DRM_ERROR("failed to disable irq %d, ret %d\n",
+				irq_idx, ret);
+			spin_unlock_irqrestore(&node->state_lock, flags);
+			return;
+		}
+		node->state = IRQ_DISABLED;
+	}
+	spin_unlock_irqrestore(&node->state_lock, flags);
 
 	/* lock histogram buffer */
 	for (i = 0; i < crtc->num_mixers; i++) {
 		hw_dspp = crtc->mixers[i].hw_dspp;
 		if (hw_dspp && hw_dspp->ops.lock_histogram)
-			hw_dspp->ops.lock_histogram(hw_dspp, &lock_hist);
+			hw_dspp->ops.lock_histogram(hw_dspp, NULL);
 	}
 
-	crtc->hist_irq_idx = irq_idx;
 	/* notify histogram event */
 	sde_crtc_event_queue(crtc_drm, sde_cp_notify_hist_event,
-						&crtc->hist_irq_idx, true);
+							NULL, true);
 }
 
 static void sde_cp_notify_hist_event(struct drm_crtc *crtc_drm, void *arg)
@@ -3108,13 +3064,11 @@ static void sde_cp_notify_hist_event(struct drm_crtc *crtc_drm, void *arg)
 	struct drm_event event;
 	struct drm_msm_hist *hist_data;
 	struct sde_kms *kms;
-	struct sde_crtc_irq_info *node = NULL;
-	unsigned long flags, state_flags;
-	int ret, irq_idx;
-	u32 i, lock_hist = 0;
+	int ret;
+	u32 i;
 
-	if (!crtc_drm || !arg) {
-		DRM_ERROR("invalid drm crtc %pK or arg %pK\n", crtc_drm, arg);
+	if (!crtc_drm) {
+		DRM_ERROR("invalid crtc %pK\n", crtc_drm);
 		return;
 	}
 
@@ -3124,69 +3078,14 @@ static void sde_cp_notify_hist_event(struct drm_crtc *crtc_drm, void *arg)
 		return;
 	}
 
+	if (!crtc->hist_blob)
+		return;
+
 	kms = get_kms(crtc_drm);
 	if (!kms || !kms->dev) {
 		SDE_ERROR("invalid arg(s)\n");
 		return;
 	}
-
-	/* disable histogram irq */
-	spin_lock_irqsave(&crtc->spin_lock, flags);
-	node = _sde_cp_get_intr_node(DRM_EVENT_HISTOGRAM, crtc);
-
-	if (!node) {
-		spin_unlock_irqrestore(&crtc->spin_lock, flags);
-		DRM_DEBUG_DRIVER("cannot find histogram event node in crtc\n");
-		/* unlock histogram */
-		ret = pm_runtime_get_sync(kms->dev->dev);
-		if (ret < 0) {
-			SDE_ERROR("failed to enable power resource %d\n", ret);
-			SDE_EVT32(ret, SDE_EVTLOG_ERROR);
-			return;
-		}
-		for (i = 0; i < crtc->num_mixers; i++) {
-			hw_dspp = crtc->mixers[i].hw_dspp;
-			if (hw_dspp && hw_dspp->ops.lock_histogram)
-				hw_dspp->ops.lock_histogram(hw_dspp,
-					&lock_hist);
-		}
-		pm_runtime_put_sync(kms->dev->dev);
-		return;
-	}
-
-	irq_idx = *(int *)arg;
-	spin_lock_irqsave(&node->state_lock, state_flags);
-	if (node->state == IRQ_ENABLED) {
-		ret = sde_core_irq_disable_nolock(kms, irq_idx);
-		if (ret) {
-			DRM_ERROR("failed to disable irq %d, ret %d\n",
-				irq_idx, ret);
-			spin_unlock_irqrestore(&node->state_lock, state_flags);
-			spin_unlock_irqrestore(&crtc->spin_lock, flags);
-			ret = pm_runtime_get_sync(kms->dev->dev);
-			if (ret < 0) {
-				SDE_ERROR("failed to enable power %d\n", ret);
-				SDE_EVT32(ret, SDE_EVTLOG_ERROR);
-				return;
-			}
-
-			/* unlock histogram */
-			for (i = 0; i < crtc->num_mixers; i++) {
-				hw_dspp = crtc->mixers[i].hw_dspp;
-				if (hw_dspp && hw_dspp->ops.lock_histogram)
-					hw_dspp->ops.lock_histogram(hw_dspp,
-						&lock_hist);
-			}
-			pm_runtime_put_sync(kms->dev->dev);
-			return;
-		}
-		node->state = IRQ_DISABLED;
-	}
-	spin_unlock_irqrestore(&node->state_lock, state_flags);
-	spin_unlock_irqrestore(&crtc->spin_lock, flags);
-
-	if (!crtc->hist_blob)
-		return;
 
 	ret = pm_runtime_get_sync(kms->dev->dev);
 	if (ret < 0) {

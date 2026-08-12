@@ -153,7 +153,7 @@ static const struct reg_default wcd938x_defaults[] = {
 	{WCD938X_HPH_CNP_EN,                                   0x80},
 	{WCD938X_HPH_CNP_WG_CTL,                               0x9A},
 	{WCD938X_HPH_CNP_WG_TIME,                              0x14},
-	{WCD938X_HPH_OCP_CTL,                                  0x68},
+	{WCD938X_HPH_OCP_CTL,                                  0x28},
 	{WCD938X_HPH_AUTO_CHOP,                                0x16},
 	{WCD938X_HPH_CHOP_CTL,                                 0x83},
 	{WCD938X_HPH_PA_CTL1,                                  0x46},
@@ -191,7 +191,11 @@ static const struct reg_default wcd938x_defaults[] = {
 	{WCD938X_SLEEP_WATCHDOG_CTL,                           0x00},
 	{WCD938X_MBHC_NEW_ELECT_REM_CLAMP_CTL,                 0x00},
 	{WCD938X_MBHC_NEW_CTL_1,                               0x02},
+#ifndef OPLUS_ARCH_EXTENDS
 	{WCD938X_MBHC_NEW_CTL_2,                               0x05},
+#else /*OPLUS_ARCH_EXTENDS*/
+	{WCD938X_MBHC_NEW_CTL_2,                               0x01},
+#endif /*OPLUS_ARCH_EXTENDS*/
 	{WCD938X_MBHC_NEW_PLUG_DETECT_CTL,                     0xE9},
 	{WCD938X_MBHC_NEW_ZDET_ANA_CTL,                        0x0F},
 	{WCD938X_MBHC_NEW_ZDET_RAMP_CTL,                       0x00},
