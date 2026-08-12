@@ -53,6 +53,9 @@ int sysctl_sched_rt_runtime = 950000;
 
 /* record the min capacity cpus */
 struct cpumask min_cap_cpu_mask;
+#ifndef cpu_isolated_mask
+#define cpu_isolated_mask cpu_none_mask
+#endif
 
 /*
  * __task_rq_lock - lock the rq @p resides on.
@@ -1977,6 +1980,7 @@ static int __set_cpus_allowed_ptr(struct task_struct *p,
 {
 	const struct cpumask *cpu_valid_mask = cpu_active_mask;
 	unsigned int dest_cpu;
+	struct cpumask allowed_mask;
 	struct rq_flags rf;
 	struct rq *rq;
 	int ret = 0;
@@ -6234,7 +6238,8 @@ static bool task_is_unity_game(struct task_struct *p)
 
 long sched_setaffinity(pid_t pid, const struct cpumask *in_mask)
 {
-	cpumask_var_t cpus_allowed, new_mask;
+	cpumask_var_t cpus_allowed, new_mask, allowed_mask;
+	unsigned int dest_cpu;
 	struct task_struct *p;
 	int retval = 0;
 	rcu_read_lock();
