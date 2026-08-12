@@ -19,15 +19,32 @@ struct msmfb_mipi_dsi_cmd {
 	u32 iris_ocp_type;
 	u32 iris_ocp_addr;
 	u32 iris_ocp_size;
+	u32 iris_ocp_value;
+	u32 response;
 	void __user *payload;
 };
 
 struct msm_iris_operate_value {
 	u32 ip;
 	u32 opt_id;
+	u32 type;
+	u32 count;
 	u32 len;
 	u32 *values;
 };
+
+struct msmfb_iris_ambient_info {
+	u32 lux;
+	u32 color_temp;
+};
+
+struct msmfb_iris_maxcll_info {
+	u32 max_cll;
+};
+
+#ifndef IRIS_OPRT_TOOL_DSI
+#define IRIS_OPRT_TOOL_DSI 0
+#endif
 
 #ifndef MSMFB_MIPI_DSI_COMMAND_LAST
 #define MSMFB_MIPI_DSI_COMMAND_LAST 0x1

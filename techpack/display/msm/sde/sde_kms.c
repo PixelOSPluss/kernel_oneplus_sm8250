@@ -3172,7 +3172,7 @@ static const struct msm_kms_funcs kms_funcs = {
 	.check_for_splash = sde_kms_check_for_splash,
 	.get_mixer_count = sde_kms_get_mixer_count,
 #if defined(OPLUS_FEATURE_PXLW_IRIS5) || defined(CONFIG_PXLW_SOFT_IRIS)
-	.iris_operate = iris_sde_kms_iris_operate,
+	.iris_operate = (void *)iris_sde_kms_iris_operate,
 #endif
 };
 

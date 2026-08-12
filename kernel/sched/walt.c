@@ -362,7 +362,7 @@ bool early_detection_notify(struct rq *rq, u64 wallclock)
 
 	rq->ed_task = NULL;
 
-	if (!is_ed_enabled() || !rq->cfs.h_nr_running)
+	if (!is_ed_enabled() || !rq->cfs.h_nr_runnable)
 		return 0;
 
 	list_for_each_entry(p, &rq->cfs_tasks, se.group_node) {
@@ -2574,7 +2574,7 @@ static int cpufreq_notifier_trans(struct notifier_block *nb,
 		unsigned long val, void *data)
 {
 	struct cpufreq_freqs *freq = (struct cpufreq_freqs *)data;
-	unsigned int cpu = freq->cpu, new_freq = freq->new;
+	unsigned int cpu = freq->policy ? freq->policy->cpu : 0, new_freq = freq->new;
 	unsigned long flags;
 	struct sched_cluster *cluster;
 	struct cpumask policy_cpus = cpu_rq(cpu)->freq_domain_cpumask;

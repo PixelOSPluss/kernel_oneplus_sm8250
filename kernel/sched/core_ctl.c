@@ -24,7 +24,7 @@
 #define cpu_isolated(cpu) (0)
 #endif
 #ifndef sched_isolate_count
-#define sched_isolate_count(cpu) (0)
+#define sched_isolate_count(...) (0)
 #endif
 #ifndef sched_isolate_cpu
 static inline int sched_isolate_cpu(int cpu) { return 0; }
