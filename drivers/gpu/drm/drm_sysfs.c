@@ -25,6 +25,26 @@
 #include "drm_internal_mi.h"
 #include <drm/msm_drm_pp.h>
 
+#if !IS_ENABLED(CONFIG_DRM_MSM)
+int dsi_display_set_disp_param(struct drm_connector *c, u32 p) { return -ENODEV; }
+int dsi_display_get_disp_param(struct drm_connector *c, u32 *p) { return -ENODEV; }
+ssize_t dsi_display_write_mipi_reg(struct drm_connector *c, char *b) { return -ENODEV; }
+ssize_t dsi_display_read_mipi_reg(struct drm_connector *c, char *b) { return -ENODEV; }
+ssize_t dsi_display_read_oled_pmic_id(struct drm_connector *c, char *b) { return -ENODEV; }
+ssize_t dsi_display_read_panel_info(struct drm_connector *c, char *b) { return -ENODEV; }
+ssize_t dsi_display_read_wp_info(struct drm_connector *c, char *b) { return -ENODEV; }
+ssize_t dsi_display_read_dynamic_fps(struct drm_connector *c, char *b) { return -ENODEV; }
+int dsi_display_set_doze_brightness(struct drm_connector *c, int b) { return -ENODEV; }
+ssize_t dsi_display_get_doze_brightness(struct drm_connector *c, char *b) { return -ENODEV; }
+int dsi_display_read_gamma_param(struct drm_connector *c) { return -ENODEV; }
+ssize_t dsi_display_print_gamma_param(struct drm_connector *c, char *b) { return -ENODEV; }
+ssize_t dsi_display_fod_get(struct drm_connector *c, char *b) { return -ENODEV; }
+ssize_t complete_commit_time_get(struct drm_connector *c, char *b) { return -ENODEV; }
+int dsi_display_set_thermal_hbm_disabled(struct drm_connector *c, bool b) { return -ENODEV; }
+int dsi_display_get_thermal_hbm_disabled(struct drm_connector *c, bool *b) { return -ENODEV; }
+ssize_t dsi_display_get_hw_vsync_info(struct drm_connector *c, char *b) { return -ENODEV; }
+#endif
+
 #define to_drm_minor(d) dev_get_drvdata(d)
 #define to_drm_connector(d) dev_get_drvdata(d)
 

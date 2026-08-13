@@ -16,6 +16,10 @@
 #include <linux/string.h>
 #include <asm/setup.h>
 #include <asm/bootinfo.h>
+
+/* Older QPNP backports declare these APIs but do not implement them. */
+int qpnp_pon_is_ps_hold_reset(void) { return 0; }
+int qpnp_pon_is_lpk(void) { return 0; }
 #include <linux/bitops.h>
 #include <linux/input/qpnp-power-on.h>
 

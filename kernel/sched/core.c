@@ -2237,6 +2237,14 @@ out:
 	return ret;
 }
 #endif /* CONFIG_NUMA_BALANCING */
+
+#ifndef CONFIG_NUMA_BALANCING
+int migrate_swap(struct task_struct *cur, struct task_struct *p,
+		 int target_cpu, int curr_cpu)
+{
+	return -EINVAL;
+}
+#endif
 /*
  * Calls to sched_migrate_to_cpumask_start() cannot nest. This can only be used
  * in process context.

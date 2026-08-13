@@ -658,6 +658,7 @@ static int goodix_fb_state_chg_callback(struct notifier_block *nb,
 
 	gf_dev = container_of(nb, struct gf_dev, notifier);
 
+	#if defined(CONFIG_DRM_MSM) || defined(CONFIG_DRM_OPLUS_NOTIFY)
 	if (val == MSM_DRM_ONSCREENFINGERPRINT_EVENT) {
 		uint8_t op_mode = 0x0;
 		op_mode = *(uint8_t *)evdata->data;
@@ -681,6 +682,7 @@ static int goodix_fb_state_chg_callback(struct notifier_block *nb,
 		send_fingerprint_message(E_FP_LCD, op_mode, NULL, 0);
 		return retval;
 	}
+	#endif
 
 	if (evdata && evdata->data && val == FB_EARLY_EVENT_BLANK && gf_dev) {
 		blank = *(int *)(evdata->data);

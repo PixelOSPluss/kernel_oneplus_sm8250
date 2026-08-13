@@ -276,6 +276,7 @@ static int anc_fb_state_chg_callback(struct notifier_block *nb,
 
 	anc_data = container_of(nb, struct anc_data, notifier);
 
+	#if defined(CONFIG_DRM_MSM) || defined(CONFIG_DRM_OPLUS_NOTIFY)
 	if (val == MSM_DRM_ONSCREENFINGERPRINT_EVENT) {
 		uint8_t op_mode = 0x0;
 		op_mode = *(uint8_t *)evdata->data;
@@ -297,6 +298,7 @@ static int anc_fb_state_chg_callback(struct notifier_block *nb,
 		}
 		return rc;
 	}
+	#endif
 
 	/*if (evdata && evdata->data && val == FB_EARLY_EVENT_BLANK && anc_data) {
         blank = *(int *)(evdata->data);

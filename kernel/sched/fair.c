@@ -6447,6 +6447,12 @@ static inline void hrtick_update(struct rq *rq)
 #endif
 
 #ifdef CONFIG_SMP
+bool __cpu_overutilized(int cpu, int delta)
+{
+	return !util_fits_cpu(cpu_util(cpu) + delta, 0,
+			      uclamp_rq_get(cpu_rq(cpu), UCLAMP_MAX), cpu);
+}
+
 bool cpu_overutilized(int cpu)
 {
 	unsigned long rq_util_max;

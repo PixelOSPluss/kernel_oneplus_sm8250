@@ -6,10 +6,32 @@
 #include <linux/bpf.h>
 #include <linux/filter.h>
 
+/* Optional backport providers: keep the core linkable when their driver is
+ * not selected; real implementations override these weak fallbacks. */
+struct device;
+struct device_attribute;
+struct trace_seq;
+__weak ssize_t smart_fps_value_show(struct device *d, struct device_attribute *a,
+					char *buf) { return -ENODEV; }
+__weak const char *scsi_trace_parse_cdb(struct trace_seq *p, unsigned char *cdb,
+					int len) { return ""; }
+__weak int get_boot_mode(void) { return 0; }
+__weak int register_device_proc(char *n, char *v, char *vendor) { return 0; }
+__weak unsigned int get_project(void) { return 0; }
+__weak unsigned int is_project(int project) { return 0; }
+__weak unsigned int dsi_panel_get_refresh_rate(void) { return 60; }
+__weak int msm_drm_notifier_call_chain(unsigned long val, void *v) { return 0; }
+
+/*
+ * GKI selects TRACE_GPU_MEM, whose driver supplies this tracepoint.  Keep a
+ * local definition only for configurations that do not build that driver.
+ */
+#ifndef CONFIG_TRACE_GPU_MEM
 #define CREATE_TRACE_POINTS
 #include <trace/events/gpu_mem.h>
 
 EXPORT_TRACEPOINT_SYMBOL(gpu_mem_total);
+#endif
 
 const struct bpf_func_proto * __weak bpf_tracing_func_proto(
 	enum bpf_func_id func_id, const struct bpf_prog *prog)
