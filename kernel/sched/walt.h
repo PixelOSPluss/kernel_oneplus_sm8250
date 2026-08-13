@@ -11,6 +11,10 @@
 #include <linux/sched/sysctl.h>
 #include <linux/sched/core_ctl.h>
 
+#ifndef cpu_isolated
+#define cpu_isolated(cpu) (0)
+#endif
+
 #define MAX_NR_CLUSTERS			3
 
 #ifdef CONFIG_HZ_300
@@ -453,13 +457,7 @@ static int in_sched_bug;
 
 static inline bool prefer_spread_on_idle(int cpu)
 {
-	if (likely(!sysctl_sched_prefer_spread))
-		return false;
-
-	if (is_min_capacity_cpu(cpu))
-		return sysctl_sched_prefer_spread >= 1;
-
-	return sysctl_sched_prefer_spread > 1;
+	return false;
 }
 
 #else /* CONFIG_SCHED_WALT */

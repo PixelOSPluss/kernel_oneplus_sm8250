@@ -142,3 +142,10 @@ kernel/configs/android-*.cfg
 out/
 build.sh
 dtbo_build.sh
+
+# magictime bring-up build artifacts
+/out-kebab/
+/out-kebab-op/
+/build.log
+/error.log
+/PixelOS-*.zip

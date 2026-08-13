@@ -6447,6 +6447,12 @@ static inline void hrtick_update(struct rq *rq)
 #endif
 
 #ifdef CONFIG_SMP
+bool __cpu_overutilized(int cpu, int delta)
+{
+	return !util_fits_cpu(cpu_util(cpu) + delta, 0,
+			      uclamp_rq_get(cpu_rq(cpu), UCLAMP_MAX), cpu);
+}
+
 bool cpu_overutilized(int cpu)
 {
 	unsigned long rq_util_max;
@@ -8785,7 +8791,7 @@ select_task_rq_fair(struct task_struct *p, int prev_cpu, int wake_flags)
 		record_wakee(p);
 
                 if (sched_energy_enabled()) {
-			new_cpu = find_energy_efficient_cpu(p, prev_cpu, sync, 1);
+			new_cpu = find_energy_efficient_cpu(p, prev_cpu, sync, 1, 0);
 			if (new_cpu >= 0)
 				return new_cpu;
 			new_cpu = prev_cpu;
@@ -9479,6 +9485,8 @@ enum migration_type {
 #define LBF_NEED_BREAK	0x02
 #define LBF_DST_PINNED  0x04
 #define LBF_SOME_PINNED	0x08
+#define LBF_IGNORE_PREFERRED_CLUSTER_TASKS 0x10
+#define LBF_IGNORE_BIG_TASKS 0x20
 #define LBF_ACTIVE_LB   0x40
 
 struct lb_env {
@@ -9972,9 +9980,9 @@ static int detach_tasks(struct lb_env *env)
 
 		continue;
 next:
-#ifdef CONFIG_SCHED_WALT
+#if 0
 		trace_sched_load_balance_skip_tasks(env->src_cpu, env->dst_cpu,
-				env->src_grp_type, p->pid, load, task_util(p),
+				0, p->pid, load, task_util(p),
 				cpumask_bits(&p->cpus_allowed)[0]);
 #endif
 		list_move(&p->se.group_node, tasks);
@@ -10533,7 +10541,7 @@ group_is_overloaded(unsigned int imbalance_pct, struct sg_lb_stats *sgs)
 	if (sgs->sum_nr_running <= sgs->group_weight)
 		return false;
 
-#ifdef CONFIG_SCHED_WALT
+#if 0
 	if (env->idle != CPU_NOT_IDLE && walt_rotation_enabled)
 		return true;
 #endif
@@ -11217,10 +11225,12 @@ static inline void update_sd_lb_stats(struct lb_env *env, struct sd_lb_stats *sd
 	 * If the domain util is greater that domain capacity, load balancing
 	 * needs to be done at the next sched domain level as well.
 	 */
+#if 0
 	if (env->sd->parent &&
 	    sds->total_capacity * 1024 < sds->total_util *
 			 sched_capacity_margin_up[group_first_cpu(sds->local)])
 		set_sd_overutilized(env->sd->parent);
+#endif
 #endif
 }
 
@@ -12195,7 +12205,6 @@ static int active_load_balance_cpu_stop(void *data)
 			update_rq_clock(busiest_rq);
 			detach_task(push_task, &env);
 			push_task_detached = 1;
-			moved = true;
 		}
 		goto out_unlock;
 	}
@@ -12455,7 +12464,7 @@ static inline int find_energy_aware_new_ilb(void)
 
 	cpumask_and(&idle_cpus, nohz.idle_cpus_mask,
 			housekeeping_cpumask(HK_FLAG_MISC));
-#ifdef CONFIG_SCHED_WALT
+#if 0
 	cpumask_andnot(&idle_cpus, &idle_cpus, cpu_isolated_mask);
 #endif
 	sg = sd->groups;
@@ -13497,7 +13506,7 @@ static void task_change_group_fair(struct task_struct *p)
 	 * We couldn't detach or attach a forked task which
 	 * hasn't been woken up by wake_up_new_task().
 	 */
-	if (READ_ONCE(p->__state) == TASK_NEW)
+	if (READ_ONCE(p->state) == TASK_NEW)
 		return;
 
 	detach_task_cfs_rq(p);

@@ -21,6 +21,25 @@
 		operating-points-v2 = <&suspendable_ddr_bw_opp_table>;
 	};
 
+	gpu_opp_table: gpu-opp-table {
+		compatible = "operating-points-v2";
+
+		opp-480000000 {
+			opp-hz = /bits/ 64 <480000000>;
+			opp-microvolt = <RPMH_REGULATOR_LEVEL_SVS_L1>;
+		};
+
+		opp-381000000 {
+			opp-hz = /bits/ 64 <381000000>;
+			opp-microvolt = <RPMH_REGULATOR_LEVEL_SVS>;
+		};
+
+		opp-290000000 {
+			opp-hz = /bits/ 64 <290000000>;
+			opp-microvolt = <RPMH_REGULATOR_LEVEL_LOW_SVS>;
+		};
+	};
+
 	msm_gpu: qcom,kgsl-3d0@3d00000 {
 		label = "kgsl-3d0";
 		compatible = "qcom,kgsl-3d0", "qcom,kgsl-3d";

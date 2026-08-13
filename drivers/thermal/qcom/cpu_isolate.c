@@ -10,6 +10,16 @@
 #include <linux/of_device.h>
 #include <linux/suspend.h>
 
+#ifndef sched_isolate_cpu
+static inline int sched_isolate_cpu(int cpu) { return 0; }
+#endif
+#ifndef sched_unisolate_cpu
+static inline int sched_unisolate_cpu(int cpu) { return 0; }
+#endif
+#ifndef sched_unisolate_cpu_unlocked
+static inline int sched_unisolate_cpu_unlocked(int cpu) { return 0; }
+#endif
+
 #define CPU_ISOLATE_LEVEL 1
 
 struct cpu_isolate_cdev {

@@ -529,6 +529,8 @@ struct adreno_device {
 	unsigned int highest_bank_bit;
 	unsigned int quirks;
 
+	struct coresight_device *csdev[GPU_CORESIGHT_MAX];
+
 	uint32_t gpmu_throttle_counters[ADRENO_GPMU_THROTTLE_COUNTERS];
 	struct work_struct irq_storm_work;
 
@@ -568,6 +570,7 @@ enum adreno_device_flags {
 	ADRENO_DEVICE_PWRON = 0,
 	ADRENO_DEVICE_PWRON_FIXUP = 1,
 	ADRENO_DEVICE_INITIALIZED = 2,
+	ADRENO_DEVICE_CORESIGHT = 3,
 	ADRENO_DEVICE_HANG_INTR = 4,
 	ADRENO_DEVICE_STARTED = 5,
 	ADRENO_DEVICE_FAULT = 6,
@@ -578,6 +581,7 @@ enum adreno_device_flags {
 	ADRENO_DEVICE_GPMU_INITIALIZED = 11,
 	ADRENO_DEVICE_ISDB_ENABLED = 12,
 	ADRENO_DEVICE_CACHE_FLUSH_TS_SUSPENDED = 13,
+	ADRENO_DEVICE_CORESIGHT_CX = 14,
 };
 
 /**
@@ -769,6 +773,44 @@ enum adreno_cp_marker_type {
 	IFPC_ENABLE,
 	IB1LIST_START,
 	IB1LIST_END,
+};
+
+struct adreno_coresight_register {
+	unsigned int offset;
+	unsigned int initial;
+	unsigned int value;
+};
+
+struct adreno_coresight_attr {
+	struct device_attribute attr;
+	struct adreno_coresight_register *reg;
+};
+
+#if IS_ENABLED(CONFIG_CORESIGHT_ADRENO)
+ssize_t adreno_coresight_show_register(struct device *device,
+		struct device_attribute *attr, char *buf);
+
+ssize_t adreno_coresight_store_register(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size);
+
+#define ADRENO_CORESIGHT_ATTR(_attrname, _reg) \
+	struct adreno_coresight_attr coresight_attr_##_attrname  = { \
+		__ATTR(_attrname, 0644, \
+		adreno_coresight_show_register, \
+		adreno_coresight_store_register), \
+		(_reg), }
+#else
+#define ADRENO_CORESIGHT_ATTR(_attrname, _reg) \
+	struct adreno_coresight_attr coresight_attr_##_attrname  = { \
+		__ATTR_NULL, \
+		(_reg), }
+#endif /* CONFIG_CORESIGHT_ADRENO */
+
+struct adreno_coresight {
+	struct adreno_coresight_register *registers;
+	unsigned int count;
+	const struct attribute_group **groups;
+	unsigned int atid;
 };
 
 struct adreno_gpudev {

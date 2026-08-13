@@ -1,0 +1,10 @@
+ifeq ($(CONFIG_BUILD_ARM64_DT_OVERLAY),y)
+    dtbo-$(CONFIG_ARCH_KONA) += \
+        kona-kebab-overlay.dtbo
+
+    kona-kebab-overlay.dtbo-base := kona.dtb kona-v2.dtb kona-v2.1.dtb
+endif
+
+always		:= $(dtb-y)
+subdir-y	:= $(dts-dirs)
+clean-files    := *.dtb *.dtbo

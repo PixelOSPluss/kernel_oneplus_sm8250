@@ -903,6 +903,7 @@ static struct ctl_table kern_table[] = {
 		.extra1		= &one,
 	},
 #endif
+#if 0
 	{
 		.procname	= "sched_lib_name",
 		.data		= sched_lib_name,
@@ -919,6 +920,7 @@ static struct ctl_table kern_table[] = {
 		.extra1		= &zero,
 		.extra2		= &two_hundred_fifty_five,
 	},
+#endif
 #if defined(CONFIG_ENERGY_MODEL) && defined(CONFIG_CPU_FREQ_GOV_SCHEDUTIL)
 	{
 		.procname	= "sched_energy_aware",
@@ -3761,6 +3763,28 @@ int proc_douintvec_capacity(struct ctl_table *table, int write,
 {
 	return do_proc_dointvec(table, write, buffer, lenp, ppos,
 				do_proc_douintvec_capacity_conv, NULL);
+}
+
+static int do_proc_douintvec_rwin(bool *negp, unsigned long *lvalp,
+				  int *valp, int write, void *data)
+{
+	if (write) {
+		if ((*lvalp >= 2 && *lvalp <= 5) || *lvalp == 8)
+			*valp = *lvalp;
+		else
+			return -EINVAL;
+	} else {
+		*negp = false;
+		*lvalp = *valp;
+	}
+	return 0;
+}
+
+int proc_douintvec_ravg_window(struct ctl_table *table, int write,
+			       void __user *buffer, size_t *lenp, loff_t *ppos)
+{
+	return do_proc_dointvec(table, write, buffer, lenp, ppos,
+				do_proc_douintvec_rwin, NULL);
 }
 
 

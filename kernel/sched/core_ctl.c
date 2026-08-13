@@ -20,6 +20,22 @@
 #include "sched.h"
 #include "walt.h"
 
+#ifndef cpu_isolated
+#define cpu_isolated(cpu) (0)
+#endif
+#ifndef sched_isolate_count
+#define sched_isolate_count(...) (0)
+#endif
+#ifndef sched_isolate_cpu
+static inline int sched_isolate_cpu(int cpu) { return 0; }
+#endif
+#ifndef sched_unisolate_cpu
+static inline int sched_unisolate_cpu(int cpu) { return 0; }
+#endif
+#ifndef sched_unisolate_cpu_unlocked
+static inline int sched_unisolate_cpu_unlocked(int cpu) { return 0; }
+#endif
+
 struct cluster_data {
 	bool inited;
 	unsigned int min_cpus;

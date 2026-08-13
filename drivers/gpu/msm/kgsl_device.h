@@ -264,6 +264,7 @@ struct kgsl_device {
 	uint32_t submit_now;
 	spinlock_t submit_lock;
 	bool slumber;
+	bool set_isdb_breakpoint;	/* Set isdb registers before snapshot */
 
 	struct mutex mutex;
 	uint32_t state;

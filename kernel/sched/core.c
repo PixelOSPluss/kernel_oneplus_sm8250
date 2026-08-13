@@ -53,6 +53,9 @@ int sysctl_sched_rt_runtime = 950000;
 
 /* record the min capacity cpus */
 struct cpumask min_cap_cpu_mask;
+#ifndef cpu_isolated_mask
+#define cpu_isolated_mask cpu_none_mask
+#endif
 
 /*
  * __task_rq_lock - lock the rq @p resides on.
@@ -1977,6 +1980,7 @@ static int __set_cpus_allowed_ptr(struct task_struct *p,
 {
 	const struct cpumask *cpu_valid_mask = cpu_active_mask;
 	unsigned int dest_cpu;
+	struct cpumask allowed_mask;
 	struct rq_flags rf;
 	struct rq *rq;
 	int ret = 0;
@@ -2233,6 +2237,14 @@ out:
 	return ret;
 }
 #endif /* CONFIG_NUMA_BALANCING */
+
+#ifndef CONFIG_NUMA_BALANCING
+int migrate_swap(struct task_struct *cur, struct task_struct *p,
+		 int target_cpu, int curr_cpu)
+{
+	return -EINVAL;
+}
+#endif
 /*
  * Calls to sched_migrate_to_cpumask_start() cannot nest. This can only be used
  * in process context.
@@ -6234,7 +6246,8 @@ static bool task_is_unity_game(struct task_struct *p)
 
 long sched_setaffinity(pid_t pid, const struct cpumask *in_mask)
 {
-	cpumask_var_t cpus_allowed, new_mask;
+	cpumask_var_t cpus_allowed, new_mask, allowed_mask;
+	unsigned int dest_cpu;
 	struct task_struct *p;
 	int retval = 0;
 	rcu_read_lock();
@@ -6312,8 +6325,8 @@ long sched_setaffinity(pid_t pid, const struct cpumask *in_mask)
 #endif
 again:
 #ifdef CONFIG_SCHED_WALT
-	cpumask_andnot(&allowed_mask, new_mask, cpu_isolated_mask);
-	dest_cpu = cpumask_any_and(cpu_active_mask, &allowed_mask);
+	cpumask_andnot(allowed_mask, new_mask, cpu_isolated_mask);
+	dest_cpu = cpumask_any_and(cpu_active_mask, allowed_mask);
 	if (dest_cpu < nr_cpu_ids) {
 #endif
 		retval = __set_cpus_allowed_ptr(p, new_mask, true);

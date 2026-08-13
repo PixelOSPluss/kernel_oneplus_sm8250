@@ -18,15 +18,8 @@ ifeq ($(CONFIG_RELOCATABLE), y)
 # Pass --no-apply-dynamic-relocs to restore pre-binutils-2.27 behaviour
 # for relative relocs, since this leads to better Image compression
 # with the relocation offsets always being zero.
-LDFLAGS_vmlinux		+= -Bsymbolic -z notext \
+LDFLAGS_vmlinux		+= -shared -Bsymbolic -z notext \
 			$(call ld-option, --no-apply-dynamic-relocs)
-
-# Pass -shared for bfd and -pie for lld to minimize Image size on both
-ifdef CONFIG_LD_IS_LLD
-LDFLAGS_vmlinux		+= -pie
-else
-LDFLAGS_vmlinux		+= -shared
-endif
 endif
 
 ifeq ($(CONFIG_ARM64_ERRATUM_843419),y)
@@ -63,9 +56,6 @@ ifeq ($(CONFIG_ARCH_KONA), y)
 ifeq ($(cc-name),clang)
 KBUILD_CFLAGS   += -mcpu=cortex-a55
 KBUILD_AFLAGS   += -mcpu=cortex-a55
-ifeq ($(CONFIG_LD_IS_LLD), y)
-KBUILD_LDFLAGS  += -mllvm -mcpu=cortex-a55
-endif
 else
 KBUILD_CFLAGS   += -mcpu=cortex-a77.cortex-a55
 KBUILD_AFLAGS   += -mcpu=cortex-a77.cortex-a55

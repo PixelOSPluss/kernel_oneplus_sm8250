@@ -17,6 +17,7 @@
  */
 #include "sched.h"
 #include "pelt.h"
+#include "walt.h"
 
 struct dl_bandwidth def_dl_bandwidth;
 

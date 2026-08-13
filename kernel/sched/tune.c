@@ -786,23 +786,23 @@ static struct cftype files[] = {
 	{
 		.name = "sched_boost_no_override",
 		.read_u64 = sched_boost_override_read,
-		.write_u64 = sched_boost_override_write_wrapper,
+		.write_u64 = sched_boost_override_write,
 	},
 	{
 		.name = "colocate",
 		.read_u64 = sched_colocate_read,
-		.write_u64 = sched_colocate_write_wrapper,
+		.write_u64 = sched_colocate_write,
 	},
 #endif
 	{
 		.name = "boost",
 		.read_s64 = boost_read,
-		.write_s64 = boost_write_wrapper,
+		.write_s64 = boost_write,
 	},
 	{
 		.name = "prefer_idle",
 		.read_u64 = prefer_idle_read,
-		.write_u64 = prefer_idle_write_wrapper,
+		.write_u64 = prefer_idle_write,
 	},
 	{
 		.name = "prefer_high_cap",
