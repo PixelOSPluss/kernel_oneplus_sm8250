@@ -1,0 +1,312 @@
+• Detailed handoff should say:
+
+  - Base repository: xiaomi_sm8250_kernel_e404
+  - Clean base commit: c0fa7e0f1d423c68c2ac376b549249d3a7a3fb71
+  - Local branches created:
+      - xiaomi-oem-base at that commit
+      - kebab-bringup from it — current branch
+
+  - Goal: retain Xiaomi’s optimized core, add only OnePlus 8T/Kebab hardware support. Do not wholesale replace Xiaomi hardware/core.
+
+  What was identified:
+
+  - The original non-booting port was based on a wholesale OnePlus hardware replacement (d937be30b00c), which removed Xiaomi-side board details such as ramoops/pstore
+    support. Empty /sys/fs/pstore therefore could not prove the actual early boot failure.
+
+  - The proper direction is Xiaomi core + selectively imported OnePlus Kebab DTS/hardware files.
+
+  Changes present on kebab-bringup (pre-existing, from earlier session):
+
+  - Imported Kebab DTS hardware:
+      - arch/arm64/boot/dts/vendor/oplus/Makefile
+      - kona-kebab-overlay.dts
+      - oplus/kebab/*
+      - oplus/kona.dts
+      - oplus/kona-v2.dts
+      - oplus/kona-v2.1.dts
+      - oplus/kona.dtsi
+
+  - Modified arch/arm64/boot/dts/vendor/Makefile to build both qcom and oplus DTS directories.
+  - Added missing GPU OPP data to arch/arm64/boot/dts/vendor/qcom/kona-gpu.dtsi.
+  - Applied compiler/config compatibility changes:
+      - Makefile: LLD-compatible -warn-stack-size handling.
+      - include/linux/input/qpnp-power-on.h: missing QPNP PON declarations/stubs.
+      - kernel/cgroup/cpuset.c: missing target structure/type corrections.
+      - include/trace/events/sched.h: scheduler trace compatibility fields.
+      - kernel/sched/walt.h: disabled incompatible preferred-spread path.
+      - kernel/sched/core.c: isolated CPU mask and cpumask compatibility.
+      - mm/memcontrol.c: initialized iterator compatibility.
+
+  Verification completed (earlier session):
+
+  - Kebab DTS-only build passed and generated:
+      - kona.dtb, kona-v2.dtb, kona-v2.1.dtb, kona-kebab-overlay.dtbo
+
+  - Xiaomi-only compile test on origin/staging-bpf completed successfully and produced:
+      - PixelOS-Kernel-alioth-2026-08-1355.zip, MD5 37a64f46a2e2638af2f7080f89d58c93
+      (compile baseline only; no Xiaomi test device)
+
+  - OnePlus tree (android_kernel_oneplus_sm8250) also compiles cleanly standalone:
+      - Last run log at android_kernel_oneplus_sm8250/error.log shows LD vmlinux OK + OBJCOPY Image.
+      - Its out/.config: CONFIG_LD_IS_LLD=y, LLD/clang r563880c, CONFIG_MODVERSIONS=y,
+        CONFIG_RELOCATABLE=y, RANDOMIZE_BASE=y, NO SMACK, NO LTO_CLANG.
+      - Link cmd it used successfully:
+        ld.lld -EL -maarch64elf -z norelro -z noexecstack --no-undefined -X -shared
+        -Bsymbolic -z notext --no-apply-dynamic-relocs --fix-cortex-a53-843419
+        --build-id --pack-dyn-relocs=relr
+
+  Build script (created earlier session):
+
+  - /serverhive/zenzer0s/pos/magictime/kernelbuilder/kbuild-kebab-test.sh
+  - Builds Xiaomi source into out-kebab, starts from vendor/kona-perf_defconfig, merges
+    OnePlus vendor/oplus.config, sets SM8250 CPU masks, enables DT overlays, verifies
+    Kebab Image/DTB/DTBO output. Tee-logging to xiaomi_sm8250_kernel_e404/build.log.
+
+  =========================================================================
+  CURRENT SESSION PROGRESS (this session) — full Kebab build iteration
+  =========================================================================
+
+  Status: ALL compile stages now pass (kernel/sched, security, drivers, techpack,
+  DTS all compile clean). Build now fails ONLY at the FINAL vmlinux LINK stage
+  with ld.lld relocation errors against __crc_* symbols (details below).
+
+  IMPORTANT data point established this session:
+  - upstream/kebab-port merge-base with xiaomi-oem-base == c0fa7e0f (same clean
+    base), so it is the same Xiaomi-core approach, further along. It compiled but
+    did NOT boot. Its fair.c + scheduler hunks are SAFE to take (compile-only).
+  - upstream/kebab-port is NOT usable as a whole (its full diff vs base is ~7967
+    files / 663k+/796k- = wholesale OnePlus replacement). Only take its small
+    scheduler/compat hunks.
+
+  Fixes applied to kebab-bringup THIS session (all small/selective, matching
+  OnePlus reference or upstream/kebab-port):
+
+  kernel/sched/fair.c:
+    - Added bool __cpu_overutilized(int cpu, int delta) (hunk from upstream/kebab-port)
+    - find_energy_efficient_cpu(p, prev_cpu, sync, 1, 0) — 5th arg added
+    - Added LBF_IGNORE_PREFERRED_CLUSTER_TASKS 0x10, LBF_IGNORE_BIG_TASKS 0x20
+    - #if 0 around WALT trace_sched_load_balance_skip_tasks, walt_rotation_enabled
+      overload check, sd->parent overutil set, cpu_isolated_mask in idle mask
+    - Removed stale moved = true in active_load_balance_cpu_stop
+    - READ_ONCE(p->state) instead of p->__state in task_change_group_fair
+
+  kernel/sched/walt.h:
+    - Added fallback: #ifndef cpu_isolated #define cpu_isolated(cpu) (0) #endif
+
+  kernel/sched/walt.c:
+    - h_nr_running -> h_nr_runnable (this 4.19 base field name)
+    - topology_get_cpu_scale(NULL, cpu) -> topology_get_cpu_scale(cpu) (single arg)
+    - cpufreq_freqs: unsigned int cpu = freq->policy ? freq->policy->cpu : 0
+
+  kernel/sched/core.c:
+    - #ifndef cpu_isolated_mask -> #define cpu_isolated_mask cpu_none_mask
+    - cpumask_var_t allowed_mask + dest_cpu local in sched_setaffinity, use
+      cpumask_andnot(allowed_mask, ...) not &allowed_mask
+    - Added migrate_swap() -EINVAL stub for !CONFIG_NUMA_BALANCING
+    - struct cpumask allowed_mask in __set_cpus_allowed_ptr
+
+  kernel/sched/core_ctl.c: fallback stubs for cpu_isolated/sched_isolate_count/
+    sched_isolate_cpu/sched_unisolate_cpu/sched_unisolate_cpu_unlocked.
+  kernel/sched/deadline.c: added #include "walt.h".
+  kernel/sched/tune.c: files[] array now uses direct fns (boost_write, prefer_idle_write,
+    sched_boost_override_write, sched_colocate_write) — matches OnePlus; wrappers are
+    CONFIG_STUNE_ASSIST-only so they were undeclared. Config keeps STUNE_ASSIST off.
+  drivers/block/vs_block_client.c: __maybe_unused on unused client vars (2 sites).
+  drivers/mmc/host/sdhci.c: uninitialized_var(scratch) -> u32 scratch = 0.
+  kernel/trace/ring_buffer.c: uninitialized_var(cpu_buffer) -> cpu_buffer = NULL.
+  kernel/trace/trace.h: fallback #define stm_log / OST_ENTITY_FTRACE_EVENTS around
+    event_trigger_unlock_commit.
+  kernel/sysctl.c: #if 0 around sched_lib_name/sched_lib_mask_force table entries +
+    added proc_douintvec_ravg_window()/do_proc_douintvec_rwin().
+  kernel/audit.c: uninitialized_var(serial) -> unsigned int serial = 0.
+  drivers/scsi/ufs/ufshcd.c: __ufshcd_cmd_log() prototype or no-op stub for
+    CONFIG_SCSI_UFSHCD_CMD_LOGGING.
+  drivers/thermal/qcom/cpu_isolate.c: static inline stubs for sched_isolate_cpu /
+    sched_unisolate_cpu / sched_unisolate_cpu_unlocked.
+  drivers/vservices/core_client.c: __maybe_unused on client var.
+  drivers/gpu/msm/kgsl_device.h: added bool set_isdb_breakpoint member.
+  drivers/gpu/msm/adreno.h (selective import from OnePlus, coresight support):
+    - enum adreno_device_flags: added ADRENO_DEVICE_CORESIGHT = 3 and
+      ADRENO_DEVICE_CORESIGHT_CX = 14
+    - added struct adreno_coresight_register, struct adreno_coresight_attr,
+      ADRENO_CORESIGHT_ATTR macro (with/without CONFIG_CORESIGHT_ADRENO),
+      struct adreno_coresight
+    - struct adreno_device: added struct coresight_device *csdev[GPU_CORESIGHT_MAX]
+  drivers/soc/qcom/msm_bus/msm_bus_core.h: #if 0 -> #if defined(CONFIG_DEBUG_FS)
+    && defined(CONFIG_QCOM_BUS_SCALING) (fixes redefinition of msm_bus_dbg_*).
+  arch/arm64/Kconfig: (experiment, REVERTED) RELOCATABLE select MODULE_REL_CRCS.
+  arch/arm64/Makefile:
+    - LDFLAGS_vmlinux now += -shared -Bsymbolic -z notext --no-apply-dynamic-relocs
+      (was -Bsymbolic... then a -pie (LLD) / -shared (bfd) ifdef; now always -shared,
+      matching OnePlus)
+    - KONA LLD LDFLAGS line removed: KBUILD_LDFLAGS += -mllvm -mcpu=cortex-a55
+      (that flag was reaching ld.lld; OnePlus has no such flag)
+
+  Build script config additions (kernelbuilder/kbuild-kebab-test.sh):
+    - -d SECURITY_SMACK -d SECURITY_APPARMOR   (Xiaomi defconfig enabled SMACK+APPARMOR;
+      Xiaomi smack_lsm.c does NOT compile under this clang and OnePlus ref is SELinux-only)
+    - -d LTO_CLANG -d LD_DEAD_CODE_DATA_ELIMINATION -e LTO_NONE -d LTO_CLANG_THIN
+      -d LTO_CLANG_FULL   (LTO_CLANG+y blocks HAVE_ARCH_PREL32_RELOCATIONS and was
+      causing the ABS32 kcrctab relocation path; OnePlus ref has LTO off. Note: also
+      -e LTO_NONE is REQUIRED, -d LTO_CLANG alone does not stick for this choice.)
+
+  =========================================================================
+  CURRENT UNRESOLVED BLOCKER — final vmlinux link
+  =========================================================================
+
+  Symptom:
+    ld.lld: error: relocation R_AARCH64_ABS32 cannot be used against symbol
+    '__crc_copy_page'; recompile with -fPIC
+    (same for __crc_memset, __crc_strlen, __crc___arm_smccc_smc, etc., "too many
+    errors"). Build dies at Makefile:1223 vmlinux.
+
+  What we verified / tried:
+  - Happens with LTO off. Config now: MODVERSIONS=y, TRIM_UNUSED_KSYMS off,
+    RELOCATABLE=y (selected by RANDOMIZE_BASE=y), HAVE_ARCH_PREL32_RELOCATIONS=y,
+    MODULE_REL_CRCS OFF (reverted).
+  - Tried CONFIG_MODULE_REL_CRCS=on (via Kconfig select) -> same link failure but
+    with R_AARCH64_PREL32 instead of ABS32. REVERTED. Both ABS32 and PREL32 fail,
+    so the relocation TYPE is not the deciding factor.
+  - Tried -pie (Xiaomi original LLD flag) and -shared (OnePlus flag): both fail.
+  - Tried removing KONA "-mllvm -mcpu=cortex-a55" KBUILD_LDFLAGS: still fails.
+
+  KEY DIAGNOSTIC FINDING (why OnePlus links but we don't):
+  - In OUR objects (e.g. out-kebab/arch/arm64/lib/memset.o) the assembly
+    EXPORT_SYMBOL creates ___kcrctab+xxx sections with R_AARCH64_ABS32
+    relocations against __crc_xxx, and __crc_xxx shows as WEAK UNDEFINED
+    (nm: " w __crc_memset"). The per-object modversions genksyms .ver relink
+    (cmd_modversions_c) does NOT appear to have resolved these to strong ABS.
+  - In the OnePlus reference build, arch/arm64/lib/memset.o has NO ___ksymtab /
+    ___kcrctab / __ksymtab_strings sections and NO __crc_* symbols at all.
+    memset is instead exported from lib/string.o (nm vmlinux shows __ksymtab_memset
+    lives at ffffff8012921bb0, defined in lib/string.o). OnePlus vmlinux has
+    __crc_memset etc. as absolute symbols (A) and linked fine.
+  - Root difference: Xiaomi arch/arm64/lib/memset.S (and other *.S) contain
+    EXPORT_SYMBOL(memset)/EXPORT_SYMBOL(__memset) at lines ~218-220; OnePlus
+    arch/arm64/lib/memset.S has NO EXPORT_SYMBOL at all.
+  - Because these are WEAK UNDEFINED __crc_* references, LLD treats them as
+    preemptible in the -shared/-pie link and rejects the ABS32 (and PREL32)
+    relocations -> "recompile with -fPIC".
+
+  NEXT STEPS TO TRY (not yet done):
+  1. Match OnePlus: strip EXPORT_SYMBOL from Xiaomi's arch/arm64/lib/*.S assembly
+     files (memset, memcpy, strncmp, etc.) so the C lib/string.o (which already
+     exports them) is the sole exporter. This directly removes the offending
+     kcrctab relocations in lib.a. Verify OnePlus only differs from Xiaomi by the
+     EXPORT_SYMBOL lines in these files before editing.
+  2. OR investigate why cmd_modversions_c genksyms .ver relink is not resolving
+     __crc_* to strong ABS in our objects (check the object .cmd / whether ld.lld
+     -r -T .ver succeeded). If the per-object CRC resolution actually ran, the
+     ABS32 relocations should have been folded away.
+  3. Re-test the bare vmlinux link after any change using:
+       make O=out-kebab vmlinux V=1
+     (link is incremental; only the final link re-runs).
+
+  IMPORTANT NOTES:
+  - After ANY CONFIG-symbol change that affects export.h/asm-generic/export.h
+    (MODULE_REL_CRCS, PREL32, MODVERSIONS), a FULL CLEAN rebuild (CLEAN=1) is
+    required — incremental builds leave stale ABS32 kcrctab objects.
+  - Do not remove source trees or existing ZIPs without checking first.
+  - Filesystem now has plenty of space (~2.5T free on /serverhive). The earlier
+    ~34GB /tmp/kebab-final-build.log issue is resolved; build.log is tee'd to
+    xiaomi_sm8250_kernel_e404/build.log (overwritten each run).
+
+  =========================================================================
+  LINK BLOCKER SOLVED — BUILD NOW PASSES END-TO-END (this session, later)
+  =========================================================================
+
+  STATUS: The final vmlinux LINK now SUCCEEDS. `bash kernelbuilder/kbuild-
+  kebab-test.sh` exits 0 with "Kebab build passed" and produces:
+    - out-kebab/arch/arm64/boot/Image                        46194712 bytes
+    - out-kebab/arch/arm64/boot/dts/vendor/oplus/kona-v2.1.dtb  467705 bytes
+    - out-kebab/arch/arm64/boot/dts/vendor/oplus/kona-kebab-overlay.dtbo
+                                                                  205524 bytes
+  This is the compile+link milestone; BOOT TESTING on hardware is still ahead.
+
+  ROOT CAUSE of the original link failure (FOUND):
+  - Xiaomi's arch/arm64/lib/*.S and arch/arm64/kernel/smccc-call.S carry
+    EXPORT_SYMBOL/EXPORT_SYMBOL_NOKASAN for 17 arch symbols. In our LLD
+    -shared link the resulting ___kcrctab R_AARCH64_ABS32 relocations target
+    __crc_* symbols that are WEAK-UNDEFINED (modversions .ver relink never
+    resolves assembly exports), so LLD treats them as preemptible and aborts
+    with "relocation R_AARCH64_ABS32 cannot be used against symbol
+    '__crc_*'; recompile with -fPIC".
+  - OnePlus never hits this: its objects carry NO export sections; all arch
+    exports live in arch/arm64/kernel/arm64ksyms.c (C -> modversions resolves
+    __crc_* to strong ABS, which LLD accepts).
+
+  THE FIX (mirrors OnePlus):
+  1. arch/arm64/kernel/arm64ksyms.c — added exports (moved from ASM):
+     copy_page, clear_page, __arch_copy_from_user/__arch_copy_to_user/
+     __arch_clear_user/__arch_copy_in_user, strchr, strrchr, strcmp, strncmp,
+     strlen, strnlen, memcmp, memchr, memset, memcpy, memmove, __memset,
+     __memcpy, __memmove, __arm_smccc_smc, __arm_smccc_hvc,
+     __ashlti3, __ashrti3, __lshrti3 (+ #include <linux/string.h>,
+     <linux/uaccess.h>, <linux/arm-smccc.h>). NOT added: bitops (Xiaomi/OnePlus
+     both use asm-generic inline, cannot export), _mcount (FUNCTION_TRACER off),
+     memstart_addr, strlen/strncmp/memcmp had to stay C-exported only (lib/
+     string.c guards on __HAVE_ARCH_* are NOT set for them since the .S files
+     existed -> they moved to arm64ksyms.c too).
+  2. Stripped EXPORT_SYMBOL(_NOKASAN) from 18 ASM files:
+     arch/arm64/lib/{clear_page,copy_from_user,copy_page,tishift,memcpy,
+     copy_to_user,clear_user,copy_in_user,memset,memchr,strchr,strcmp,strnlen,
+     strrchr,strncmp,memcmp,strlen}.S + arch/arm64/kernel/smccc-call.S.
+     C-object exports in arch/arm64/lib/{delay,csum,xor-neon,uaccess_flushcache}
+     .c are unaffected (modversions resolves them fine).
+
+  NEXT LAYER OF LINK ERRORS (undefined symbols) — all resolved:
+  - techpack/display: Xiaomi konadisp.conf + konadispconf.h had DRM_MSM_DP=n and
+    QCOM_MDSS_DP_PLL=n while pll_drv.o is always built -> dp_pll_clock_register_7nm/
+    10nm/14nm undefined. Changed both files to =y/1 (this ALSO enables Kebab's
+    USB-C DisplayPort, a real OP8T hardware feature; matches OnePlus).
+  - techpack/display msm_debugfs_late_init: definer only exists in main-tree
+    drivers/gpu/drm/msm (not built). OnePlus avoids it via DEBUG_FS off
+    (msm_drv.h static-inline stub). Disabled DEBUG_FS in build script.
+  - camera __tracepoint_cam_*: Xiaomi cam_utils/Makefile omits cam_trace.o
+    (the CREATE_TRACE_POINTS definer). Added cam_trace.o only; cam_debug_util.o
+    was NOT added (Xiaomi's cam_debug_util.h already defines cam_get_module_name/
+    cam_debug_log as static inline -> redefinition error).
+  - backlight_device_*: CONFIG_BACKLIGHT_CLASS_DEVICE lives inside the
+    BACKLIGHT_LCD_SUPPORT menu. Enabled BOTH in build script (OnePlus defconfig
+    has both; Xiaomi's kona-perf_defconfig had neither).
+  - of_free_phandle_cache: undefined because we enable CONFIG_OF_OVERLAY
+    (needed for kebab overlay) but Xiaomi's drivers/of/base.c lacked the
+    public of_free_phandle_cache() (OnePlus has it). Added it to Xiaomi base.c.
+  - __tracepoint_map/unmap (iommu) and __tracepoint_xhci_*: definers
+    (iommu-traces.o, xhci-trace.o) are gated by CONFIG_DEBUG_KERNEL. Did NOT
+    enable DEBUG_KERNEL (pulls CONFIG_SCHED_DEBUG which exposes a half-merged
+    EEVDF-era kernel/sched/debug.c that does not compile on this WALT base).
+    Instead made the two definers build unconditionally:
+    - drivers/usb/host/Makefile: xhci-hcd-y += xhci-trace.o
+    - drivers/iommu/Makefile: obj-y += iommu-traces.o
+  - clk_debug_measure_register / clk_debug_mux_ops / map_debug_bases: defined
+    in drivers/clk/qcom/clk-debug.c which Xiaomi's Makefile never built.
+    Added: clk-qcom-y += clk-dummy.o clk-debug.o (line 15).
+  - scsi_trace_parse_cdb: drivers/scsi scsi_trace.o gated by DEBUG_KERNEL.
+    Changed to: scsi_mod-y += scsi_trace.o; scsi_logging.o stays gated.
+  - qpnp_pon_is_lpk / qpnp_pon_is_ps_hold_reset: referenced ONLY by Xiaomi's
+    arch/arm64/kernel/bootinfo.c; NO implementation exists anywhere in the
+    tree (stock Xiaomi ships alioth with `# CONFIG_BOOT_INFO is not set`).
+    Disabled CONFIG_BOOT_INFO in build script.
+  - save_stack_trace_user: no arm64 impl in either tree. Xiaomi forces
+    CONFIG_USER_STACKTRACE_SUPPORT=y via `select` in arch/arm64/Kconfig;
+    OnePlus has no such select. Removed the select line from arch/arm64/Kconfig
+    and set -d USER_STACKTRACE_SUPPORT in build script.
+
+  BUILD SCRIPT config block now also sets:
+    -e BACKLIGHT_CLASS_DEVICE -e BACKLIGHT_LCD_SUPPORT
+    -d DEBUG_FS -d BOOT_INFO -d USER_STACKTRACE_SUPPORT
+  (DEBUG_KERNEL left OFF deliberately — see sched/debug.c note above.)
+
+  CONFIG-GATED DEFINER-NOT-BUILT PATTERN to remember for future rounds:
+  tracepoint definers (xhci-trace.o, iommu-traces.o, cam_trace.o, scsi_trace.o)
+  and single-file helpers (clk-debug.c, of_free_phandle_cache) get silently
+  dropped when a config/Makefile differs from the reference; the cheap fix is
+  to build the definer unconditionally (obj-y / *-y) or disable the referencing
+  feature, and the safe config compass is android_kernel_oneplus_sm8250/out/.config
+  (the proven-working reference) plus Xiaomi's own alioth_defconfig.
+
+  COMMANDS:
+    Build:   bash /serverhive/zenzer0s/pos/magictime/kernelbuilder/kbuild-kebab-test.sh
+    Clean:   CLEAN=1 bash ... (only if export.h/config-affecting changes)
+    Logs:    xiaomi_sm8250_kernel_e404/build.log (overwritten each run)
