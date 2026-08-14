@@ -56,10 +56,20 @@ void arch_set_max_freq_scale(struct cpumask *cpus,
 
 static DEFINE_MUTEX(cpu_scale_mutex);
 DEFINE_PER_CPU(unsigned long, cpu_scale) = SCHED_CAPACITY_SCALE;
+DEFINE_PER_CPU(unsigned long, thermal_pressure);
 
 void topology_set_cpu_scale(unsigned int cpu, unsigned long capacity)
 {
 	per_cpu(cpu_scale, cpu) = capacity;
+}
+
+void arch_set_thermal_pressure(struct cpumask *cpus,
+			       unsigned long th_pressure)
+{
+	int cpu;
+
+	for_each_cpu(cpu, cpus)
+		WRITE_ONCE(per_cpu(thermal_pressure, cpu), th_pressure);
 }
 
 static ssize_t cpu_capacity_show(struct device *dev,

@@ -645,6 +645,10 @@ struct cfs_rq {
 	int			throttled;
 	int			throttle_count;
 	struct list_head	throttled_list;
+#ifndef CONFIG_64BIT
+	u64			throttled_pelt_idle_copy;
+#endif
+	u64			throttled_pelt_idle;
 #endif /* CONFIG_CFS_BANDWIDTH */
 #endif /* CONFIG_FAIR_GROUP_SCHED */
 };
@@ -926,6 +930,47 @@ DECLARE_STATIC_KEY_FALSE(sched_uclamp_used);
 #endif /* CONFIG_UCLAMP_TASK */
 
 /*
+ * u64_u32_load/u64_u32_store
+ *
+ * Use a copy of a u64 value to protect against data race. This is only
+ * applicable for 32-bits architectures.
+ */
+#ifdef CONFIG_64BIT
+# define u64_u32_load_copy(var, copy)       var
+# define u64_u32_store_copy(var, copy, val) (var = val)
+# define u64_u32_load(var)                  u64_u32_load_copy(var, var##_copy)
+# define u64_u32_store(var, val)            u64_u32_store_copy(var, var##_copy, val)
+#else
+# define u64_u32_load_copy(var, copy)					\
+({									\
+	u64 __val, __val_copy;						\
+	do {								\
+		__val_copy = copy;					\
+		/*							\
+		 * paired with u64_u32_store_copy(), ordering access	\
+		 * to var and copy.					\
+		 */							\
+		smp_rmb();						\
+		__val = var;						\
+	} while (__val != __val_copy);					\
+	__val;								\
+})
+# define u64_u32_store_copy(var, copy, val)				\
+do {									\
+	typeof(val) __val = (val);					\
+	WRITE_ONCE(var, __val);						\
+	/*								\
+	 * paired with u64_u32_load_copy(), ordering access to var and	\
+	 * copy.							\
+	 */								\
+	smp_wmb();							\
+	WRITE_ONCE(copy, __val);					\
+} while (0)
+# define u64_u32_load(var)                  u64_u32_load_copy(var, var##_copy)
+# define u64_u32_store(var, val)            u64_u32_store_copy(var, var##_copy, val)
+#endif
+
+/*
  * This is the main, per-CPU runqueue data structure.
  *
  * Locking rule: those places that want to lock multiple runqueues
@@ -1000,6 +1045,12 @@ struct rq {
 	u64			clock_task ____cacheline_aligned;
 	u64			clock_pelt;
 	unsigned long		lost_idle_time;
+#ifndef CONFIG_64BIT
+	u64			clock_pelt_idle_copy;
+	u64			clock_idle_copy;
+#endif
+	u64			clock_pelt_idle;
+	u64			clock_idle;
 
 	atomic_t		nr_iowait;
 
@@ -1032,6 +1083,9 @@ struct rq {
 	struct sched_avg	avg_dl;
 #ifdef CONFIG_HAVE_SCHED_AVG_IRQ
 	struct sched_avg	avg_irq;
+#endif
+#ifdef CONFIG_SCHED_THERMAL_PRESSURE
+	struct sched_avg	avg_thermal;
 #endif
 	u64			idle_stamp;
 	u64			avg_idle;
@@ -2790,6 +2844,11 @@ unsigned long scale_irq_capacity(unsigned long util, unsigned long irq, unsigned
 
 #ifdef CONFIG_SMP
 extern struct static_key_false sched_energy_present;
+
+static inline bool sched_energy_enabled(void)
+{
+	return static_branch_unlikely(&sched_energy_present);
+}
 #endif
 
 enum sched_boost_policy {

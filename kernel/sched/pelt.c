@@ -112,6 +112,8 @@ accumulate_sum(u64 delta, struct sched_avg *sa,
 {
 	u32 contrib = (u32)delta; /* p == 0 -> delta < 1024 */
 	u64 periods;
+	u64 divider;
+	bool eas_enable = sched_energy_enabled();
 
 	delta += sa->period_contrib;
 	periods = delta / 1024; /* A period is 1024us (~1ms) */
@@ -120,26 +122,51 @@ accumulate_sum(u64 delta, struct sched_avg *sa,
 	 * Step 1: decay old *_sum if we crossed period boundaries.
 	 */
 	if (periods) {
-		sa->load_sum = decay_load(sa->load_sum, periods);
-		sa->runnable_load_sum =
-			decay_load(sa->runnable_load_sum, periods);
-		sa->util_sum = decay_load((u64)(sa->util_sum), periods);
+		if (running && eas_enable)
+			delta %= 1024;
+		else {
+			sa->load_sum = decay_load(sa->load_sum, periods);
+			sa->runnable_load_sum =
+				decay_load(sa->runnable_load_sum, periods);
+			sa->util_sum = decay_load((u64)(sa->util_sum), periods);
 
-		/*
-		 * Step 2
-		 */
-		delta %= 1024;
-		contrib = __accumulate_pelt_segments(periods,
-				1024 - sa->period_contrib, delta);
+			/*
+			 * Step 2
+			 */
+			delta %= 1024;
+			if (load) {
+				/*
+				 * This relies on the:
+				 *
+				 * if (!load)
+				 *	runnable = running = 0;
+				 *
+				 * clause from ___update_load_sum(); this results in
+				 * the below usage of @contrib to disappear entirely,
+				 * so no point in calculating it.
+				 */
+				contrib = __accumulate_pelt_segments(periods,
+						1024 - sa->period_contrib, delta);
+			}
+		}
 	}
 	sa->period_contrib = delta;
+	divider = LOAD_AVG_MAX - 1024 + sa->period_contrib;
 
-	if (load)
+	if (load) {
 		sa->load_sum += load * contrib;
-	if (runnable)
+		sa->load_sum = min_t(u64, sa->load_sum, divider * load);
+	}
+
+	if (runnable) {
 		sa->runnable_load_sum += runnable * contrib;
-	if (running)
+		sa->runnable_load_sum = min_t(u64, sa->runnable_load_sum, divider * runnable);
+	}
+
+	if (running) {
 		sa->util_sum += contrib << SCHED_CAPACITY_SHIFT;
+		sa->util_sum = min_t(u64, sa->util_sum, divider << SCHED_CAPACITY_SHIFT);
+	}
 
 	return periods;
 }
@@ -226,7 +253,7 @@ ___update_load_sum(u64 now, struct sched_avg *sa,
 static __always_inline void
 ___update_load_avg(struct sched_avg *sa, unsigned long load, unsigned long runnable)
 {
-	u32 divider = LOAD_AVG_MAX - 1024 + sa->period_contrib;
+	u32 divider = get_pelt_divider(sa);
 
 	/*
 	 * Step 2: update *_avg.
@@ -359,6 +386,37 @@ int update_dl_rq_load_avg(u64 now, struct rq *rq, int running)
 
 	return 0;
 }
+
+#ifdef CONFIG_SCHED_THERMAL_PRESSURE
+/*
+ * thermal:
+ *
+ *   load_sum = \Sum se->avg.load_sum but se->avg.load_sum is not tracked
+ *
+ *   util_avg and runnable_load_avg are not supported and meaningless.
+ *
+ * Unlike rt/dl utilization tracking that track time spent by a cpu
+ * running a rt/dl task through util_avg, the average thermal pressure is
+ * tracked through load_avg. This is because thermal pressure signal is
+ * time weighted "delta" capacity unlike util_avg which is binary.
+ * "delta capacity" =  actual capacity  -
+ *			capped capacity a cpu due to a thermal event.
+ */
+
+int update_thermal_load_avg(u64 now, struct rq *rq, u64 capacity)
+{
+	if (___update_load_sum(now, &rq->avg_thermal,
+			       capacity,
+			       capacity,
+			       capacity)) {
+		___update_load_avg(&rq->avg_thermal, 1, 1);
+		trace_pelt_thermal_tp(rq);
+		return 1;
+	}
+
+	return 0;
+}
+#endif
 
 #ifdef CONFIG_HAVE_SCHED_AVG_IRQ
 /*
